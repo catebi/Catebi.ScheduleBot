@@ -71,7 +71,7 @@ async def start_handler(event, check_user: bool = False, language: str = 'en'):
 
     if not user:
         # show warning that the user is not an existing volunteer
-        await event.edit("You are not a registered volunteer, please contact the administrator.")
+        await event.edit(error_not_registered[language])
         return
 
     else:
@@ -102,7 +102,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
     if not user:
         # show warning that the user is not an existing volunteer
-        await event.edit("You are not a registered volunteer, please contact the administrator.")
+        await event.respond("You are not a registered volunteer, please contact the administrator.")
         return
 
     language = user.language if user else 'en'

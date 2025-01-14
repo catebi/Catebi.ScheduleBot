@@ -67,6 +67,12 @@ Other dates:
 """
 }
 
+# region Error messages
+error_not_registered = {
+    'en': "You are not a registered volunteer. Please contact the administrator.",
+    'ru': "Вы не зарегистрированный волонтер. Пожалуйста, свяжитесь с администратором."
+}
+
 # region Buttons
 
 button_new_schedule = {
