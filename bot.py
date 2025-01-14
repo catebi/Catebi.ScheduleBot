@@ -214,8 +214,8 @@ async def callback_handler(event):
         today_volunteers = Schedule.all(fields=['volunteer'], formula=match({'date': datetime.now().date()}))
         today_volunteers = ', '.join([volunteer.volunteer.telegram for volunteer in today_volunteers])
 
-        # get a list of scheduled dates
-        scheduled_dates = Schedule.all(fields=['date', 'volunteer'], sort=['date'])
+        # get a list of scheduled dates starting from tomorrow
+        scheduled_dates = Schedule.all(fields=['date', 'volunteer'], sort=['date'], formula=match({'date': (">=", datetime.now().date() + timedelta(days=1))}))
         dates_list = []
         for date in scheduled_dates:
             dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {date.volunteer.telegram}")
