@@ -98,7 +98,13 @@ async def settings_handler(event):
 @bot.on(events.NewMessage(pattern='/schedule'))
 @logger
 async def schedule_handler(event, language: str = 'en', update: bool = False):
+     # check if user exists in Airtable
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
+    if not user:
+        # show warning that the user is not an existing volunteer
+        await event.edit("You are not a registered volunteer, please contact the administrator.")
+        return
+
     language = user.language if user else 'en'
 
     # get today's volunteers
@@ -211,7 +217,7 @@ async def callback_handler(event):
     # View all scheduled dates
     if data == 'general_schedule':
         # get a list of scheduled dates
-        scheduled_dates = Schedule.all(fields=['date', 'volunteer'], sort=['date'], formula=match({'date': (">=", datetime.now().date())}))
+        scheduled_dates = Schedule.all(fields=['date', 'volunteer', 'telegram'], sort=['date'], formula=match({'date': (">=", datetime.now().date())}))
         dates_list = []
         today_volunteers = []
         for date in scheduled_dates:
@@ -222,9 +228,9 @@ async def callback_handler(event):
             same_date = [d for d in dates_list if d.startswith(date.date.strftime('%d.%m'))]
             if same_date:
                 dates_list.remove(same_date[0])
-                dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {same_date[0].split(': ')[1]}, {date.volunteer.telegram}")
+                dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {same_date[0].split(': ')[1]}, {date.volunteer.telegram if date.volunteer else date.telegram+' ❓'}")
             else:
-                dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {date.volunteer.telegram}")
+                dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {date.volunteer.telegram if date.volunteer else date.telegram+' ❓'}")
 
         buttons = [
             [Button.inline(button_back[language], data='back')]
