@@ -218,7 +218,13 @@ async def callback_handler(event):
         scheduled_dates = Schedule.all(fields=['date', 'volunteer'], sort=['date'], formula=match({'date': (">=", datetime.now().date() + timedelta(days=1))}))
         dates_list = []
         for date in scheduled_dates:
-            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {date.volunteer.telegram}")
+            # aggregate volunteers if two are scheduled at the same date
+            same_date = [d for d in dates_list if d.startswith(date.date.strftime('%d.%m'))]
+            if same_date:
+                dates_list.remove(same_date[0])
+                dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {same_date[0].split(': ')[1]}, {date.volunteer.telegram}")
+            else:
+                dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {date.volunteer.telegram}")
 
         buttons = [
             [Button.inline(button_back[language], data='back')]
