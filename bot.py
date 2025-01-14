@@ -210,15 +210,15 @@ async def callback_handler(event):
 
     # View all scheduled dates
     if data == 'general_schedule':
-        # get a list of volunteers for today
-        today_volunteers = Schedule.all(fields=['volunteer'], formula=match({'date': datetime.now().date()}))
-        today_volunteers = ', '.join([volunteer.volunteer.telegram for volunteer in today_volunteers])
-
-        # get a list of scheduled dates starting from tomorrow
-        scheduled_dates = Schedule.all(fields=['date', 'volunteer'], sort=['date'], formula=match({'date': (">=", datetime.now().date() + timedelta(days=1))}))
+        # get a list of scheduled dates
+        scheduled_dates = Schedule.all(fields=['date', 'volunteer'], sort=['date'], formula=match({'date': (">=", datetime.now().date())}))
         dates_list = []
+        today_volunteers = []
         for date in scheduled_dates:
             # aggregate volunteers if two are scheduled at the same date
+            if date.date == datetime.now().date():
+                today_volunteers.append(date.volunteer.telegram)
+                continue
             same_date = [d for d in dates_list if d.startswith(date.date.strftime('%d.%m'))]
             if same_date:
                 dates_list.remove(same_date[0])
@@ -230,7 +230,7 @@ async def callback_handler(event):
             [Button.inline(button_back[language], data='back')]
         ]
 
-        await event.edit(general_schedule[language].format(today_volunteers if today_volunteers else '😿', '\n'.join(dates_list)), buttons=buttons)
+        await event.edit(general_schedule[language].format(', '.join(today_volunteers) if today_volunteers else '😿', '\n'.join(dates_list)), buttons=buttons)
 
 
     # Get back
