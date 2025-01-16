@@ -5,6 +5,7 @@ class Volunteer(Model):
     telegram = fields.TextField('telegram', readonly=True)
     telegram_chat_id = fields.NumberField('telegram_chat_id', readonly=True)
     language = fields.SelectField('language')
+    roles = fields.LookupField('volunteer_roles', readonly=True)
 
     class Meta:
         memorize = True
@@ -17,6 +18,7 @@ class Schedule(Model):
     date = fields.DateField('date')
     telegram_chat_id = fields.NumberField('telegram_chat_id')
     volunteer = fields.SingleLinkField('volunteer', Volunteer)
+    type = fields.SelectField('type')
 
     class Meta:
         memorize = True

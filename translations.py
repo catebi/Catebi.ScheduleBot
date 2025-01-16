@@ -19,6 +19,11 @@ main_menu = {
     'ru': "Главное меню 😽\n\nДежурства сегодня: {}"
 }
 
+new_schedule_type_prompt = {
+    'en': "❓ Choose a type of duty you want to sign up for.",
+    'ru': "❓ Выберите тип дежурства, на которое хотите записаться."
+}
+
 new_schedule_prompt = {
     'en': "Choose a date you want to sign up for.\n\nP.S. The date is hidden if there's two volunteers already signed up for it.",
     'ru': "Выберите дату, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже записались два волонтера."
@@ -78,6 +83,16 @@ error_not_registered = {
 button_new_schedule = {
     'en': "📝 Sign up",
     'ru': "📝 Записаться"
+}
+
+button_type_cleaning = {
+    'en': "🧹 Cleaning",
+    'ru': "🧹 Уборка"
+}
+
+button_type_medical = {
+    'en': "🩺 Medical",
+    'ru': "🩺 Медуход"
 }
 
 button_delete_schedule = {
