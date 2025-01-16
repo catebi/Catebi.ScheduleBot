@@ -192,27 +192,28 @@ async def callback_handler(event):
         for i in range(14):
             date = datetime.now().date() + timedelta(days=i)
             available_dates[date] = {}
-            available_dates[date]['volunteers'] = 0
+            available_dates[date]['cleaning'] = 0
+            available_dates[date]['medical'] = 0
 
         # check if the date is already scheduled by two volunteers, remove it from the list
         scheduled_dates = Schedule.all(fields=['date', 'type'])
         for date in scheduled_dates:
-            if date.date in available_dates and date.type == 'cleaning':
-                available_dates[date.date]['volunteers'] += 1
+            if date.date in available_dates:
+                available_dates[date.date][date.type] += 1
 
         for date in available_dates.copy(): # copy the list to avoid RuntimeError
-            if available_dates[date]['volunteers'] == 2 and type == 'cleaning':
+            if (available_dates[date][type] == 2 and type == 'cleaning') or (available_dates[date][type] == 1 and type == 'medical'):
                 available_dates.pop(date)
 
         # check if the date is already scheduled by the user, remove it from the list
         user_scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id}))
         for date in user_scheduled_dates:
-            if date.date in available_dates and date.type == 'cleaning':
+            if date.date in available_dates and date.type == type:
                 available_dates.pop(date.date)
 
         # show a list of available dates
         buttons = [
-            [Button.inline(f"{date.strftime('%d.%m, %A')} {'1️⃣' if available_dates[date]['volunteers'] == 1 else '2️⃣' if available_dates[date]['volunteers'] == 2 else '🆓'}", data=f'add_schedule:{date}:{type}')] for date in available_dates
+            [Button.inline(f"{date.strftime('%d.%m, %A')} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}", data=f'add_schedule:{date}:{type}')] for date in available_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
         await event.edit(new_schedule_prompt[language], buttons=buttons)
