@@ -105,7 +105,14 @@ async def start_handler(event, check_user: bool = False, language: str = 'en'):
 @bot.on(events.NewMessage(pattern='/help'))
 @logger
 async def help_handler(event):
-    await event.respond("Help message.")
+    user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
+    language = user.language if user else 'en'
+    if not user:
+        # show warning that the user is not an existing volunteer
+        await event.respond(error_not_registered[language])
+        return
+
+    await event.respond(help_message[language])
 
 @bot.on(events.NewMessage(pattern='/settings'))
 @logger
@@ -123,7 +130,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
     if not user:
         # show warning that the user is not an existing volunteer
-        await event.respond("You are not a registered volunteer, please contact the administrator.")
+        await event.respond(error_not_registered[language])
         return
 
     language = user.language if user else 'en'
