@@ -53,14 +53,14 @@ def update_volunteers(step: str):
     for date in scheduled_dates:
         # aggregate volunteers if two are scheduled at the same date
         if date.date == datetime.now().date():
-            today_volunteers_list.append(date.volunteer.telegram if date.type == 'cleaning' else '🩺'+date.volunteer.telegram)
+            today_volunteers_list.append(date.volunteer.telegram if date.type == 'cleaning' else '🏥'+date.volunteer.telegram)
             continue
         same_date = [d for d in dates_list if d.startswith(date.date.strftime('%d.%m'))]
         if same_date:
             dates_list.remove(same_date[0])
-            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {same_date[0].split(': ')[1]}, {date.volunteer.telegram if date.type == 'cleaning' else '🩺'+date.volunteer.telegram}")
+            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {same_date[0].split(': ')[1]}, {date.volunteer.telegram if date.type == 'cleaning' else '🏥'+date.volunteer.telegram}")
         else:
-            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {date.volunteer.telegram if date.type == 'cleaning' else '🩺'+date.volunteer.telegram}")
+            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {date.volunteer.telegram if date.type == 'cleaning' else '🏥'+date.volunteer.telegram}")
 
     logging.warning(f"Volunteers list and schedule updated ({step}).")
 
@@ -196,7 +196,8 @@ async def callback_handler(event):
 
         # show a list of available dates
         buttons = [
-            [Button.inline(f"{date.strftime('%d.%m, %A')} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}", data=f'add_schedule:{date}:{type}')] for date in available_dates
+            [Button.inline(f"{date.strftime('%d.%m, %A')} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}",
+                           data=f'add_schedule:{date}:{type}')] for date in available_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
         await event.edit(new_schedule_prompt[language], buttons=buttons)
@@ -214,51 +215,64 @@ async def callback_handler(event):
             type=type
         ).save()
         update_volunteers('add_schedule')
-        await event.edit(add_schedule_success[language].format(date.strftime('%d.%m, %A')), buttons=[Button.inline(button_back[language], data='back')])
+        await event.edit(
+            add_schedule_success[language].format(
+                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                date.strftime('%d.%m, %A')),
+            buttons=[Button.inline(button_back[language], data='back')]
+        )
 
     # View my scheduled dates
     if data == 'my_schedule':
-        schedule_types = {
-            'cleaning': '🧹',
-            'medical': '🩺'
-        }
         # get a list of scheduled dates
         scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id}), sort=['date'])
         buttons = [
-            [Button.inline(f"{date.date.strftime('%d.%m, %A')}: {schedule_types[date.type]}", data=f'my_schedule_delete:{date.date}')] for date in scheduled_dates
+            [Button.inline(f"{date.date.strftime('%d.%m, %A')}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]}",
+                           data=f'my_schedule_delete:{date.date}:{date.type}')] for date in scheduled_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
         await event.edit(my_schedule_prompt[language], buttons=buttons)
 
     # Ask to confirm the deletion of a scheduled date
     if data.startswith('my_schedule_delete:'):
-        _, date = data.split(':')
+        _, date, type = data.split(':')
         date = datetime.strptime(date, '%Y-%m-%d').date()
         buttons = [
-            [Button.inline(button_yes[language], data=f'delete_schedule:{date}')],
+            [Button.inline(button_yes[language], data=f'delete_schedule:{date}:{type}')],
             [Button.inline(button_back[language], data='back')]
         ]
-        await event.edit(my_schedule_delete_prompt[language].format(date.strftime('%d.%m, %A')), buttons=buttons)
+        await event.edit(
+            my_schedule_delete_prompt[language].format(
+                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                date.strftime('%d.%m, %A')), 
+            buttons=buttons
+        )
 
     # Delete a scheduled date from Airtable
     if data.startswith('delete_schedule:'):
-        _, date = data.split(':')
+        _, date, type = data.split(':')
         date = datetime.strptime(date, '%Y-%m-%d').date()
         # delete a record from the Schedule table
-        unwanted_schedule = Schedule.first(formula=match({'telegram_chat_id': event.sender.id, 'date': date}))
+        unwanted_schedule = Schedule.first(formula=match({'telegram_chat_id': event.sender.id, 'date': date, 'type': type}))
         unwanted_schedule.delete()
         update_volunteers('delete_schedule')
-        await event.edit(delete_schedule_success[language].format(date.strftime('%d.%m, %A')), buttons=[Button.inline(button_back[language], data='back')])
+        await event.edit(
+            delete_schedule_success[language].format(
+                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                date.strftime('%d.%m, %A')),
+            buttons=[Button.inline(button_back[language], data='back')]
+        )
 
 
     # View all scheduled dates
     if data == 'general_schedule':
-        # get a list of scheduled dates
-        buttons = [
-            [Button.inline(button_back[language], data='back')]
-        ]
-
-        await event.edit(general_schedule[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿', '\n'.join(dates_list)), buttons=buttons)
+        # show a list of all scheduled dates
+        await event.edit(
+            general_schedule[language].format(
+                ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
+                '\n'.join(dates_list)),
+            buttons=[Button.inline(button_back[language], data='back')]
+        )
 
 
     # Get back

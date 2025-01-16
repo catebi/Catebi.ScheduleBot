@@ -30,8 +30,8 @@ new_schedule_prompt = {
 }
 
 add_schedule_success = {
-    'en': "You have successfully signed up for the **{}**!",
-    'ru': "Вы успешно записались на **{}**!"
+    'en': "Yay! You have successfully signed up for: **{}** on **{}**!",
+    'ru': "Ура! Вы записаны: **{}** на **{}**!"
 }
 
 delete_schedule_prompt = {
@@ -40,8 +40,8 @@ delete_schedule_prompt = {
 }
 
 delete_schedule_success = {
-    'en': "You have successfully deleted your registration for **{}**.",
-    'ru': "Вы успешно удалили свою запись на **{}**."
+    'en': "You have successfully deleted your **{}** registration for **{}**.",
+    'ru': "Вы успешно удалили свою запись **{}** на **{}**."
 }
 
 my_schedule_prompt = {
@@ -50,8 +50,8 @@ my_schedule_prompt = {
 }
 
 my_schedule_delete_prompt = {
-    'en': "Do you want to delete your registration for **{}**?",
-    'ru': "Вы хотите удалить свою запись на **{}**?"
+    'en': "Do you want to delete your **{}** registration for **{}**?",
+    'ru': "Вы хотите удалить свою запись **{}** на **{}**?"
 }
 
 general_schedule = {
@@ -72,12 +72,6 @@ Other dates:
 """
 }
 
-# region Error messages
-error_not_registered = {
-    'en': "You are not a registered volunteer. Please contact the administrator.",
-    'ru': "Вы не зарегистрированный волонтер. Пожалуйста, свяжитесь с администратором."
-}
-
 # region Buttons
 
 button_new_schedule = {
@@ -91,13 +85,8 @@ button_type_cleaning = {
 }
 
 button_type_medical = {
-    'en': "🩺 Medical",
-    'ru': "🩺 Медуход"
-}
-
-button_delete_schedule = {
-    'en': "❌ Delete my registration",
-    'ru': "❌ Удалить мою запись"
+    'en': "🏥 Medical",
+    'ru': "🏥 Медуход"
 }
 
 button_my_schedule = {
@@ -118,4 +107,11 @@ button_back = {
 button_yes = {
     'en': "✅ Yes",
     'ru': "✅ Да"
+}
+
+
+# region Error messages
+error_not_registered = {
+    'en': "You are not a registered volunteer. Please contact the administrator.",
+    'ru': "Вы не зарегистрированный волонтер. Пожалуйста, свяжитесь с администратором."
 }
