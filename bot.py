@@ -1,6 +1,6 @@
 from telethon import TelegramClient, events, Button
 import logging
-import locale
+import locale, os, time
 from pyairtable import Api
 from pyairtable.formulas import match
 from datetime import datetime, timedelta
@@ -14,32 +14,10 @@ logging.basicConfig(format='[%(levelname)s] %(message)s',
                     level=logging.WARNING)
 
 # TODO:
-# 0. Show a menu with language selection / done
-#   - English (default) / done
-#   - Russian / done
-# 0.1. Read/register user with Airtable / done
-#   - Check if user exists in Airtable / done
-#   - Register user if not exists / not needed
-#   - Get user's language from Airtable / done
-# 1. Menu with inline buttons
-#   - New scheduled date / done
-#   - Delete scheduled date / deprecated
-#   - View my scheduled dates / done
-#   - View all scheduled dates / done
-# 2. New scheduled date
-#   - Show list of available dates with inline buttons, 2 weeks in advance / done
-#   - Show number of sheduled volunteers on that date, "free" if none / done
-#   - Hide dates that are already scheduled with two volunteers / done, + hide user's scheduled dates
-#   - Show "Confirm" button / not needed
-# 3. Delete scheduled date
-#   - Show list of scheduled dates with inline buttons / done
-#   - Show "Confirm" button / done
-# 4. View my scheduled dates
-#   - Show list of my scheduled dates / done
-# 5. View all scheduled dates
-#   - Show list of all scheduled dates / done
-#   - Show who is scheduled on each date / done
-#   - Show who is working today / done
+# - Implement an admin interface to manage notifications
+# - Implement a notification system to remind volunteers about their scheduled dates
+# - Implement a notification to remind admins there are no volunteers scheduled for the next day
+# - Add the ability to change notification text and timing, with default fallbacks
 
 def logger(func):
     def decorator(*args, **kwargs):
@@ -49,11 +27,16 @@ def logger(func):
             logging.error(err, exc_info=True)
     return decorator
 
+os.environ['TZ'] = 'Asia/Tbilisi'
+time.tzset()
+logging.warning(f"Timezone set to {os.environ['TZ']}, time is {datetime.now()}.")
+
 # Initialize Airtable API
 api = Api(api_key=airtable_api_key)
 
 bot = TelegramClient('catebi', api_id, api_hash).start(bot_token=bot_token)
 
+# Initialize global variables
 today_volunteers = None
 scheduled_dates = None
 today_volunteers_list = None
