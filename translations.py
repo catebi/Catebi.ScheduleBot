@@ -103,6 +103,18 @@ Other dates:
 """
 }
 
+localized_dates = {
+    'ru': {
+        "Monday": "Понедельник",
+        "Tuesday": "Вторник",
+        "Wednesday": "Среда",
+        "Thursday": "Четверг",
+        "Friday": "Пятница",
+        "Saturday": "Суббота",
+        "Sunday": "Воскресенье"
+    },
+}
+
 # region Buttons
 
 button_new_schedule = {

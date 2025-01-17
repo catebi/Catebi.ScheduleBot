@@ -261,7 +261,10 @@ async def callback_handler(event):
         date = datetime.strptime(date, '%Y-%m-%d').date()
         # delete a record from the Schedule table
         unwanted_schedule = Schedule.first(formula=match({'telegram_chat_id': event.sender.id, 'date': date, 'type': type}))
-        unwanted_schedule.delete()
+        if unwanted_schedule:
+            unwanted_schedule.delete()
+        else:
+            logging.error(f"Record not found: {event.sender.id}, {date}, {type}; probably already deleted.")
         update_volunteers('delete_schedule')
         await event.edit(
             delete_schedule_success[language].format(
@@ -274,10 +277,16 @@ async def callback_handler(event):
     # View all scheduled dates
     if data == 'general_schedule':
         # show a list of all scheduled dates
+        if locale.getlocale(locale.LC_TIME)[0] == 'ru_RU':
+            translated_dates = []
+            for item in dates_list:
+                for key, value in localized_dates['ru'].items():
+                    item = item.replace(key, value)
+                translated_dates.append(item)
         await event.edit(
             general_schedule[language].format(
                 ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
-                '\n'.join(dates_list)),
+                '\n'.join(dates_list if locale.getlocale(locale.LC_TIME)[0] == 'en_US' else translated_dates)),
             buttons=[Button.inline(button_back[language], data='back')]
         )
 
