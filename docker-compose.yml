@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   schedule-bot:
+    image: schedule_bot:latest
     env_file:
       - .env
     build:
