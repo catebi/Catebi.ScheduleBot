@@ -1,0 +1,50 @@
+name: Deploy Bot to VPS
+
+on:
+  push:
+    branches:
+      - feature/#1_ci_cd
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # set up SSH
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      # copy files to the VPS
+      - name: Copy project files
+        uses: appleboy/scp-action@v0.1.1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: .
+          target: ~/Catebi.ScheduleBot
+
+      # deploy and restart using docker-compose
+      - name: Deploy and restart
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/Catebi.ScheduleBot
+            echo "Setting up environment variables..."
+            export TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
+            export TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+            export BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+            export AIRTABLE_APIKEY=${{ secrets.AIRTABLE_APIKEY }}
+            export AIRTABLE_BASEID=${{ secrets.AIRTABLE_BASEID }}
+            echo "Pulling Docker images..."
+            docker-compose down
+            docker-compose up -d
