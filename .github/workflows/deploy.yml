@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: checkout_and_notify
     steps:
-      - name: Setup SSH and SCP files
+      - name: Set up SSH and SCP files
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -38,7 +38,12 @@ jobs:
           port: 22
           script: |
             mkdir -p ~/Catebi.ScheduleBot
+            chmod 755 ~/Catebi.ScheduleBot
             rm -rf ~/Catebi.ScheduleBot/*
+
+      - name: List source files
+        run: ls -la
+
       - name: Copy project files
         uses: appleboy/scp-action@master
         with:
@@ -49,6 +54,23 @@ jobs:
           source: .
           target: "~/Catebi.ScheduleBot"
           debug: true
+          tar_exec: tar
+
+      - name: Verify files on VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            ls -la ~/Catebi.ScheduleBot
+            cd ~/Catebi.ScheduleBot
+            if [ -f debug.tar.gz ]; then
+              tar -tzvf debug.tar.gz
+            else
+              echo "No tar archive found."
+            fi
 
   build_and_deploy:
     runs-on: ubuntu-latest
