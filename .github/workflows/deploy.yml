@@ -3,7 +3,7 @@ name: Deploy Bot to VPS
 on:
   push:
     branches:
-      - feature/#1_ci_cd
+      - main
 
 jobs:
   deploy:
