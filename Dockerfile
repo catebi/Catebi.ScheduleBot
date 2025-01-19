@@ -2,9 +2,11 @@ FROM python:3.12-slim-bullseye
 
 # Update package manager and install Python utilities
 RUN apt-get update && \
-    apt-get install -y locales && \
+    apt-get install -y --no-install-recommends locales && \
     echo "ru_RU.UTF-8 UTF-8" >> /etc/locale.gen && \
+    echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen && \
     locale-gen && \
+    dpkg-reconfigure --frontend=noninteractive locales && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
