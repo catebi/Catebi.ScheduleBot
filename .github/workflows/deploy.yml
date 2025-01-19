@@ -39,8 +39,9 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
-          target: ~/Catebi.ScheduleBot
+          source: "./*"
+          target: "~/Catebi.ScheduleBot"
+          debug: true
 
   build_and_deploy:
     runs-on: ubuntu-latest
