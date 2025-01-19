@@ -157,14 +157,16 @@ async def callback_handler(event):
 
     data = event.data.decode("utf-8")
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
-    language = user.language
-    locale.setlocale(locale.LC_TIME, 'ru_RU.utf8' if language == 'ru' else 'en_US.utf8')
 
     # Change user's language
     if data.startswith('language'):
         _, lang = data.split(':')
         # save user's language to Airtable
         await start_handler(event, check_user=True, language=lang)
+        return
+
+    language = user.language
+    locale.setlocale(locale.LC_TIME, 'ru_RU.utf8' if language == 'ru' else 'en_US.utf8')
 
     # New scheduled date
     if data.startswith('new_schedule'):
