@@ -15,11 +15,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Archive project files
+        uses: actions/upload-artifact@v3
+        with:
+          name: project-files
+          path: .
+
   deploy:
     needs: checkout
     runs-on: ubuntu-latest
-
     steps:
+      - name: Download project files
+        uses: actions/download-artifact@v3
+        with:
+          name: project-files
+
       # copy files to the VPS
       - name: Copy project files
         uses: appleboy/scp-action@v0.1.7
