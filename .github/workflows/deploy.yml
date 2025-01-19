@@ -33,12 +33,14 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/Catebi.ScheduleBot
-            echo "Setting up environment variables..."
-            export TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
-            export TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
-            export BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-            export AIRTABLE_APIKEY=${{ secrets.AIRTABLE_APIKEY }}
-            export AIRTABLE_BASEID=${{ secrets.AIRTABLE_BASEID }}
+            echo "Updating .env file..."
+            cat <<EOF > .env
+            API_ID=${{ secrets.TELEGRAM_API_ID }}
+            API_HASH=${{ secrets.TELEGRAM_API_HASH }}
+            BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+            AIRTABLE_API_KEY=${{ secrets.AIRTABLE_APIKEY }}
+            AIRTABLE_BASE_ID=${{ secrets.AIRTABLE_BASEID }}
+            EOF
             echo "Pulling Docker images..."
             docker-compose down
             docker-compose up -d
