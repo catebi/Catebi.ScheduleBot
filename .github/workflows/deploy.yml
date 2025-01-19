@@ -6,17 +6,21 @@ on:
       - main
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
 
+  checkout:
+    runs-on: ubuntu-latest
     steps:
-      # checkout the repository
       - name: Checkout code
         uses: actions/checkout@v3
 
+  deploy:
+    needs: checkout
+    runs-on: ubuntu-latest
+
+    steps:
       # copy files to the VPS
       - name: Copy project files
-        uses: appleboy/scp-action@v0.1.1
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.USERNAME }}
