@@ -107,12 +107,14 @@ async def start_handler(event, check_user: bool = False, language: str = 'en'):
 async def help_handler(event):
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
     language = user.language if user else 'en'
+    version_info = f"🤖 Bot Version: <code>{version}</code>"  # Add version info here
+
     if not user:
         # show warning that the user is not an existing volunteer
-        await event.respond(error_not_registered[language])
+        await event.respond(f"{error_not_registered[language]}\n\n{version_info}")
         return
 
-    await event.respond(help_message[language])
+    await event.respond(f"{help_message[language]}\n\n{version_info}")
 
 @bot.on(events.NewMessage(pattern='/settings'))
 @logger
@@ -251,7 +253,7 @@ async def callback_handler(event):
         await event.edit(
             my_schedule_delete_prompt[language].format(
                 button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
-                date.strftime('%d.%m, %A')), 
+                date.strftime('%d.%m, %A')),
             buttons=buttons
         )
 
