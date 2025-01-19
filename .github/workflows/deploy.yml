@@ -18,6 +18,11 @@ jobs:
     - id: workspace
       run: echo "workspace-path=${{ github.workspace }}" >> $GITHUB_ENV
 
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
     - name: Notify Deployment Start
       run: |
         start_msg="🚀 Deployment Start for: <code>${{ github.repository }}</code> on branch <code>${{ github.ref_name }}</code>%0A☑️Commit: ${{ env.COMMIT_MESSAGE }}"
