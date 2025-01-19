@@ -14,7 +14,7 @@ jobs:
       COMMIT_MESSAGE: $(git log -1 --pretty=%B | jq -sRr @uri)
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - id: workspace
       run: echo "workspace-path=${{ github.workspace }}" >> $GITHUB_ENV
 
