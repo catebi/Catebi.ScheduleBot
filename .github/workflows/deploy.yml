@@ -15,9 +15,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
-    - id: workspace
-      run: echo "workspace-path=${{ github.workspace }}" >> $GITHUB_ENV
-
+    # - id: workspace
+    #   run: echo "workspace-path=${{ github.workspace }}" >> $GITHUB_ENV
     - name: Notify Deployment Start
       run: |
         start_msg="🚀 Deployment Start for: <code>${{ github.repository }}</code> on branch <code>${{ github.ref_name }}</code>%0A☑️Commit: ${{ env.COMMIT_MESSAGE }}"
@@ -29,12 +28,12 @@ jobs:
     needs: checkout_and_notify
     steps:
       - name: Copy project files
-        uses: appleboy/scp-action@v0.1.1
+        uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: ${{ github.workspace }}
+          source: "."
           target: ~/Catebi.ScheduleBot
 
   build_and_deploy:
@@ -42,7 +41,7 @@ jobs:
     needs: copy_files
     steps:
       - name: Deploy and restart
-        uses: appleboy/ssh-action@v0.1.7
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.USERNAME }}
