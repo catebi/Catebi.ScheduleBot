@@ -65,11 +65,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: build_and_deploy
     steps:
-    - name: Notify Deployment and Healthcheck Result
+    - name: Notify Deployment
       if: success()
       run: |
-        echo "Deployment and healthcheck passed"
-        msg="✅ Successful Deployment: %0A🤖<code>${{ github.repository }}</code> at <code>${{ github.sha }}</code>"
+        echo "Deployment passed"
+        msg="✅ Successful Deployment passed: %0A🤖<code>${{ github.repository }}</code> at <code>${{ github.sha }}</code>"
         curl -s -X POST "https://api.telegram.org/bot${{ secrets.NOTIFY_BOT_TOKEN }}/sendMessage" \
         -d "chat_id=${{ vars.IT_TELEGRAM_CHAT_ID }}&text=${msg}&message_thread_id=${{ vars.IT_TELEGRAM_CHAT_NOTIFY_TOPIC_ID }}&parse_mode=HTML"
     - name: Notify Deployment Failure
