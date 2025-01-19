@@ -101,13 +101,12 @@ async def start_handler(event, check_user: bool = False, language: str = 'en'):
 
     await schedule_handler(event, language, update=True)
 
-
 @bot.on(events.NewMessage(pattern='/help'))
 @logger
 async def help_handler(event):
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
     language = user.language if user else 'en'
-    version_info = f"🤖 Bot Version: <code>{version}</code>"  # Add version info here
+    version_info = f"🤖 Bot Version: `{version}`"  # Add version info here
 
     if not user:
         # show warning that the user is not an existing volunteer
