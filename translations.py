@@ -55,10 +55,15 @@ new_schedule_type_prompt = {
     'ru': "❓ Выберите тип дежурства, на которое хотите записаться."
 }
 
-new_schedule_prompt = {
-    'en': "Choose a date you want to sign up for.\n\nP.S. The date is hidden if there's two volunteers already signed up for it.",
-    'ru': "Выберите дату, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже записались два волонтера."
+new_schedule_prompt_cleaning = {
+    'en': "Choose a date you want to sign up for **🧹 Cleaning**\n\nP.S. The date is hidden if there's two volunteers already signed up for it.",
+    'ru': "Выберите дату для смены **🧹 Уборка**, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже записались два волонтера."
 }
+
+new_schedule_prompt_medical = {
+    'en': "Choose a date you want to sign up for **🏥Medical**\n\nP.S. The date is hidden if there's a medical shift already assigned on that date.",
+    'ru': "Выберите дату для смены **🏥 Медуход**, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже назначена медицинская смена."
+} 
 
 add_schedule_success = {
     'en': "Yay! You have successfully signed up for: **{}** on **{}**!",
@@ -142,6 +147,11 @@ button_general_schedule = {
     'ru': "📋 Общее расписание"
 }
 
+button_notifications = {
+    'en': "🔔 Notifications",
+    'ru': "🔔 Уведомления"
+}
+
 button_back = {
     'en': "⬅️ Back",
     'ru': "⬅️ Назад"
@@ -157,4 +167,9 @@ button_yes = {
 error_not_registered = {
     'en': "You are not a registered volunteer. Please contact the administrator.",
     'ru': "Вы не зарегистрированный волонтер. Пожалуйста, свяжитесь с администратором."
+}
+
+error_no_roles = {
+    'en': "Oh! Looks like you don't have the necessary roles to use this bot.\nPlease check in with the volunteer bot to get started!",
+    'ru': "Ой! Похоже, у вас нет необходимых ролей для использования этого бота.\nПожалуйста, отметьтесь в волонтерском боте, чтобы начать!"
 }

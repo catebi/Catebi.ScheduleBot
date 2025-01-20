@@ -135,13 +135,24 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
         return
 
     language = user.language if user else 'en'
-    roles = user.roles
+    role_switch = 'none'
+    if 'kk.medical' in user.roles and 'kk.cleaning' in user.roles:
+        role_switch = 'both'
+    elif 'kk.medical' in user.roles and 'kk.cleaning' not in user.roles:
+        role_switch = 'medical'
+    elif 'kk.cleaning' in user.roles and 'kk.medical' not in user.roles:
+        role_switch = 'cleaning'
+
+    admin_flag = True if 'kk.admin_curator' in user.roles else False
 
     buttons = [
-        [Button.inline(button_new_schedule[language], data=f'new_schedule:ask' if 'kk.medical' in roles else 'new_schedule:cleaning')],
+        [Button.inline(button_new_schedule[language], data=f'new_schedule:{role_switch}')],
         [Button.inline(button_my_schedule[language], data=f'my_schedule')],
         [Button.inline(button_general_schedule[language], data=f'general_schedule')]
     ]
+
+    if admin_flag:
+        buttons.append([Button.inline(button_notifications[language], data='admin')])
 
     if update:
         await event.edit(main_menu[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
@@ -170,13 +181,17 @@ async def callback_handler(event):
 
     # New scheduled date
     if data.startswith('new_schedule'):
-        if data.split(':')[1] == 'ask':
+        # ask for the type of schedule if role_switch is 3 (both roles are assigned)
+        if data.split(':')[1] == 'both':
             buttons = [
                 [Button.inline(button_type_cleaning[language], data='new_schedule:cleaning')],
                 [Button.inline(button_type_medical[language], data='new_schedule:medical')],
                 [Button.inline(button_back[language], data='back')]
             ]
             await event.edit(new_schedule_type_prompt[language], buttons=buttons)
+            return
+        elif data.split(':')[1] == 'none':
+            await event.edit(error_no_roles[language], buttons=[Button.inline(button_back[language], data='back')])
             return
 
         type = data.split(':')[1]
@@ -210,7 +225,7 @@ async def callback_handler(event):
                            data=f'add_schedule:{date}:{type}')] for date in available_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
-        await event.edit(new_schedule_prompt[language], buttons=buttons)
+        await event.edit(new_schedule_prompt_cleaning[language] if type == 'cleaning' else new_schedule_prompt_medical[language], buttons=buttons)
 
     # Write a new scheduled date to Airtable
     if data.startswith('add_schedule'):
