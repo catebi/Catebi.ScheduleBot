@@ -120,6 +120,46 @@ localized_dates = {
     },
 }
 
+notifications_menu = {
+    'en': "🔔 Notifications menu.\n\nYour current settings are:\n__Notification text:__\n{}\n\n__Notify at: **{}**__\n__Date threshold: **{}**__",
+    'ru': "🔔 Меню уведомлений.\n\nВаши текущие настройки:\n__Текст уведомления:__\n{}\n\n__Время оповещения: **{}**__\n__Остаток дней до дежурства: **{}**__"
+}
+
+default_notification_text = {
+    'en': "There's no volunteer assigned for **{}**. If you have 30-40 minutes, please sign up for a light cleaning. You need to clean the litter boxes, refresh the water, and add food, that's all!",
+    'ru': "На дату **{}** нет дежурного. Если у тебя есть 30-40 минут, пожалуйста, запишись на лайт вариант уборки. Нужно почистить лотки, обновить воду и досыпать корм, всё!"
+}
+
+notifications_settings_text_prompt = {
+    'en': "Please enter your custom notification text.\n\nYou can use curly braces (**{}**) to insert the date in your text.",
+    'ru': "Пожалуйста, введите свой текст уведомления.\n\nВы можете использовать фигурные скобочки (**{}**) для вставки даты в ваш текст."
+}
+
+notifications_settings_text_success = {
+    'en': "You have successfully set your custom notification text!",
+    'ru': "Вы успешно установили свой текст уведомления!"
+}
+
+notifications_settings_notify_at_prompt = {
+    'en': "Please choose the time you want to receive the notification about shift shortage.",
+    'ru': "Пожалуйста, выберите время, когда вы хотите получать оповещения о недостатке дежурствах."
+}
+
+notifications_settings_notify_at_success = {
+    'en': "You have successfully set the notification time to **{}**!",
+    'ru': "Вы успешно установили время оповещения на **{}**!"
+}
+
+notifications_settings_date_threshold_prompt = {
+    'en': "Select the number of days in advance you want to receive a notification if there are no shifts scheduled.",
+    'ru': "Выберите количество дней, за которые вы хотите получать оповещение если нет назначенных смен."
+}
+
+notifications_settings_date_threshold_success = {
+    'en': "You have successfully set the date threshold to **{}** {}!",
+    'ru': "Вы успешно установили остаток дней до дежурства на **{}** {}!"
+}
+
 # region Buttons
 
 button_new_schedule = {
@@ -161,6 +201,31 @@ button_yes = {
     'en': "✅ Yes",
     'ru': "✅ Да"
 }
+
+button_notifications_settings_text = {
+    'en': "📝 Set custom text",
+    'ru': "📝 Установить свой текст" 
+}
+
+button_notifications_text_reset = {
+    'en': "🔄 Reset to default text",
+    'ru': "🔄 Сбросить текст на стандартный"
+}
+
+button_notifications_settings_notify_at = {
+    'en': "⏰ Set notify time",
+    'ru': "⏰ Установить время оповещения"
+}
+
+button_notifications_settings_date_threshold = {
+    'en': "📅 Set date threshold",
+    'ru': "📅 Установить остаток дней"
+}
+
+button_notifications_send = {
+    'en': "📤 Send now",
+    'ru': "📤 Отправить сейчас"
+} 
 
 
 # region Error messages
