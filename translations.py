@@ -235,6 +235,6 @@ error_not_registered = {
 }
 
 error_no_roles = {
-    'en': "Oh! Looks like you don't have the necessary roles to use this bot.\nPlease check in with the volunteer bot to get started!",
-    'ru': "Ой! Похоже, у вас нет необходимых ролей для использования этого бота.\nПожалуйста, отметьтесь в волонтерском боте, чтобы начать!"
+    'en': "Oh! Looks like you don't have the necessary roles to use this bot.\nPlease check in with the [volunteer bot](https://t.me/catebi_volunteer_bot) to get started!",
+    'ru': "Ой! Похоже, у вас нет необходимых ролей для использования этого бота.\nПожалуйста, отметьтесь в [волонтерском боте](https://t.me/catebi_volunteer_bot), чтобы начать!"
 }

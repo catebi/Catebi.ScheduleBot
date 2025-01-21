@@ -272,7 +272,7 @@ async def callback_handler(event):
     # View my scheduled dates
     if data == 'my_schedule':
         # get a list of scheduled dates
-        scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id}), sort=['date'])
+        scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
         buttons = [
             [Button.inline(f"{date.date.strftime('%d.%m, %A')}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]}",
                            data=f'my_schedule_delete:{date.date}:{date.type}')] for date in scheduled_dates
