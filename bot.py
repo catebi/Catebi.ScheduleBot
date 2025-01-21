@@ -152,7 +152,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
     ]
 
     if admin_flag:
-        buttons.append([Button.inline(button_notifications[language], data='admin')])
+        buttons.append([Button.inline(button_notifications[language], data='notifications')])
 
     if update:
         await event.edit(main_menu[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
@@ -160,11 +160,33 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
 
     await event.respond(main_menu[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
 
-# region Callbacks
+# handle custom notification text setting
+custom_text_setting = {}
+@bot.on(events.NewMessage())
+@logger
+async def notifications_handler(event):
+    if event.sender.id not in custom_text_setting:
+        return
+
+    logging.warning(f"Custom text setting: {event.sender.id}, {event.message.message}")
+
+    admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
+    admin.custom_text = event.message.message
+    admin.save()
+
+    prompt = custom_text_setting[event.sender.id]['prompt']
+
+    await prompt.edit(prompt.message, buttons=None) # remove buttons from the prompt to avoid multiple clicks
+    await event.respond(notifications_settings_text_success[admin.volunteer.language], buttons=[Button.inline(button_back[admin.volunteer.language], data='notifications')])
+
+    custom_text_setting.pop(event.sender.id)
+
+
+# region Buttons
 @bot.on(events.CallbackQuery())
 @logger
 async def callback_handler(event):
-    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list
+    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list, custom_text_setting
 
     data = event.data.decode("utf-8")
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
@@ -250,7 +272,7 @@ async def callback_handler(event):
     # View my scheduled dates
     if data == 'my_schedule':
         # get a list of scheduled dates
-        scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id}), sort=['date'])
+        scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
         buttons = [
             [Button.inline(f"{date.date.strftime('%d.%m, %A')}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]}",
                            data=f'my_schedule_delete:{date.date}:{date.type}')] for date in scheduled_dates
@@ -307,6 +329,109 @@ async def callback_handler(event):
                 '\n'.join(dates_list if locale.getlocale(locale.LC_TIME)[0] == 'en_US' else translated_dates)),
             buttons=[Button.inline(button_back[language], data='back')]
         )
+
+
+
+    #--------------------------------------------------------------------------
+    # Admin menu
+    #--------------------------------------------------------------------------
+    if data == 'notifications' or data == 'notifications:unset' or data == 'notifications:reset':
+        if 'unset' in data:
+            custom_text_setting.pop(event.sender.id)
+
+        if 'reset' in data:
+            admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
+            admin.custom_text = ''
+            admin.save()
+
+        # show current notifications settings
+        currect_settings = Notification.first(fields=['admin_curator', 'notify_at', 'custom_text', 'date_threshold'], formula=match({'telegram_chat_id': event.sender.id}))
+        if not currect_settings:
+            currect_settings = Notification(
+                admin_curator=event.sender.username,
+                volunteer=user,
+                telegram_chat_id=event.sender.id,
+                notify_at='12:00',
+                date_threshold='+1')
+            currect_settings.save()
+
+        buttons = [
+            [Button.inline(button_notifications_settings_text[language], data='notifications_settings_text')],
+            [Button.inline(button_notifications_settings_notify_at[language], data='notifications_settings_notify_at')],
+            [Button.inline(button_notifications_settings_date_threshold[language], data='notifications_settings_date_threshold')],
+            [Button.inline(button_notifications_send[language], data='notifications_send')],
+            [Button.inline(button_back[language], data='back')]
+        ]
+        notification_date = datetime.now().date() + timedelta(days=int(str(currect_settings.date_threshold).split('+')[1]))
+        await event.edit(
+            notifications_menu[language].format(
+                str(currect_settings.custom_text).format(notification_date.strftime('%d.%m, %A')) if currect_settings.custom_text != '' else default_notification_text[language].format(notification_date.strftime('%d.%m, %A')),
+                currect_settings.notify_at,
+                currect_settings.date_threshold),
+            buttons=buttons
+        )
+
+
+
+
+
+
+    if data == 'notifications_settings_text':
+        # show prompt to set custom text
+        custom_text_setting[event.sender.id] = {}
+        custom_text_setting[event.sender.id]['prompt'] = await event.edit(
+            notifications_settings_text_prompt[language],
+            buttons=[Button.inline(button_back[language], data='notifications:unset'), Button.inline(button_notifications_text_reset[language], data='notifications:reset')]
+        )
+
+
+
+
+
+
+    if data == 'notifications_settings_notify_at':
+        # prepare a list of available hours
+        hours = [f"{i:02d}:00" for i in range(24)]
+        # show buttons 4 in a row
+        buttons = [
+            [Button.inline(hour, data=f'notifications_settings_notify_at:{hour}') for hour in hours[i:i+4]] for i in range(0, len(hours), 4)
+        ]
+        buttons.append([Button.inline(button_back[language], data='notifications')])
+        await event.edit(notifications_settings_notify_at_prompt[language], buttons=buttons)
+
+    if data.startswith('notifications_settings_notify_at:'):
+        _, hour, minute = data.split(':')
+        admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
+        admin.notify_at = f"{hour}:{minute}"
+        admin.save()
+        await event.edit(notifications_settings_notify_at_success[language].format(f"{hour}:{minute}"), buttons=[Button.inline(button_back[language], data='notifications')])
+
+
+
+
+
+
+
+    if data == 'notifications_settings_date_threshold':
+        # prepare a list of available days
+        days = [f"+{i}" for i in range(1, 7)]
+        buttons = [
+            [Button.inline(day, data=f'notifications_settings_date_threshold:{day}') for day in days]
+        ]
+        buttons.append([Button.inline(button_back[language], data='notifications')])
+        await event.edit(notifications_settings_date_threshold_prompt[language], buttons=buttons)
+
+    if data.startswith('notifications_settings_date_threshold:'):
+        _, day = data.split(':')
+        admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
+        admin.date_threshold = day
+        admin.save()
+
+        day_variation = {
+            'en': 'days' if int(day) > 1 else 'day',
+            'ru': 'день' if int(day) == 1 else 'дня' if int(day) < 5 else 'дней'
+        }
+        await event.edit(notifications_settings_date_threshold_success[language].format(day, day_variation[language]), buttons=[Button.inline(button_back[language], data='notifications')])
 
 
     # Get back
