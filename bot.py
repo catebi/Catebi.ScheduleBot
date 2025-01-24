@@ -1,9 +1,11 @@
 from telethon import TelegramClient, events, Button
 import logging
-import locale, os, time
+import os, time
 from pyairtable import Api
 from pyairtable.formulas import match
 from datetime import datetime, timedelta
+from babel.dates import format_date
+
 import aiocron
 
 from settings import *
@@ -42,6 +44,8 @@ scheduled_dates = None
 today_volunteers_list = None
 dates_list = None
 
+# region Functions
+
 # update volunteers list and schedule
 def update_volunteers(step: str):
     global today_volunteers, scheduled_dates, today_volunteers_list, dates_list
@@ -72,6 +76,14 @@ update_volunteers('start')
 @logger
 def daily_schedule_update():
     update_volunteers('daily')
+
+
+# function to format the date in the user's language
+def format_date_by_language(date: datetime, language: str):
+    formatted_date = format_date(date, format='dd.MM, EEEE', locale=language) # use generic format for all languages: 31.12, Monday
+    return f"{formatted_date.split(' ')[0]} {formatted_date.split(' ')[1].capitalize()}" # capitalize the first letter of the day of the week
+
+
 
 # region Commands
 
@@ -199,7 +211,6 @@ async def callback_handler(event):
         return
 
     language = user.language
-    locale.setlocale(locale.LC_TIME, 'ru_RU.utf8' if language == 'ru' else 'en_US.utf8')
 
     # New scheduled date
     if data.startswith('new_schedule'):
@@ -243,7 +254,7 @@ async def callback_handler(event):
 
         # show a list of available dates
         buttons = [
-            [Button.inline(f"{date.strftime('%d.%m, %A')} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}",
+            [Button.inline(f"{format_date_by_language(date, language)} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}",
                            data=f'add_schedule:{date}:{type}')] for date in available_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
@@ -265,7 +276,7 @@ async def callback_handler(event):
         await event.edit(
             add_schedule_success[language].format(
                 button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
-                date.strftime('%d.%m, %A')),
+                format_date_by_language(date, language)),
             buttons=[Button.inline(button_back[language], data='back')]
         )
 
@@ -274,7 +285,7 @@ async def callback_handler(event):
         # get a list of scheduled dates
         scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
         buttons = [
-            [Button.inline(f"{date.date.strftime('%d.%m, %A')}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]}",
+            [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]}",
                            data=f'my_schedule_delete:{date.date}:{date.type}')] for date in scheduled_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
@@ -291,7 +302,7 @@ async def callback_handler(event):
         await event.edit(
             my_schedule_delete_prompt[language].format(
                 button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
-                date.strftime('%d.%m, %A')),
+                format_date_by_language(date, language)),
             buttons=buttons
         )
 
@@ -309,7 +320,7 @@ async def callback_handler(event):
         await event.edit(
             delete_schedule_success[language].format(
                 button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
-                date.strftime('%d.%m, %A')),
+                format_date_by_language(date, language)),
             buttons=[Button.inline(button_back[language], data='back')]
         )
 
@@ -317,7 +328,7 @@ async def callback_handler(event):
     # View all scheduled dates
     if data == 'general_schedule':
         # show a list of all scheduled dates
-        if locale.getlocale(locale.LC_TIME)[0] == 'ru_RU':
+        if language == 'ru':
             translated_dates = []
             for item in dates_list:
                 for key, value in localized_dates['ru'].items():
@@ -326,7 +337,7 @@ async def callback_handler(event):
         await event.edit(
             general_schedule[language].format(
                 ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
-                '\n'.join(dates_list if locale.getlocale(locale.LC_TIME)[0] == 'en_US' else translated_dates)),
+                '\n'.join(dates_list if language == 'en' else translated_dates)),
             buttons=[Button.inline(button_back[language], data='back')]
         )
 
