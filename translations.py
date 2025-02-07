@@ -160,6 +160,16 @@ notifications_settings_date_threshold_success = {
     'ru': "Вы успешно установили остаток дней до дежурства на **{}** {}!"
 }
 
+notifications_send_success = {
+    'en': "The notification has been sent successfully!\n\nSent to **{}** volunteers out of **{}**.",
+    'ru': "Уведомление успешно отправлено!\n\nОтправлено **{}** волонтерам из **{}**."
+}
+
+notifications_no_volunteers = {
+    'en': "There are no volunteers registered for **{}**!",
+    'ru': "На дату **{}** нет зарегистрированных волонтеров!"
+}
+
 # region Buttons
 
 button_new_schedule = {
@@ -227,6 +237,15 @@ button_notifications_send = {
     'ru': "📤 Отправить сейчас"
 } 
 
+button_curator_notifications_send = {
+    'en': "📤 Notify all volunteers",
+    'ru': "📤 Уведомить всех"
+}
+
+button_curator_ignore = {
+    'en': "🚫 Ignore",
+    'ru': "🚫 Игнорировать"
+}
 
 # region Error messages
 error_not_registered = {

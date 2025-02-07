@@ -2,11 +2,12 @@ from telethon import TelegramClient, events, Button
 import logging
 import os, time
 from pyairtable import Api
-from pyairtable.formulas import match
+from pyairtable.formulas import match, FunctionCall
 from datetime import datetime, timedelta
 from babel.dates import format_date
 
 import aiocron
+import asyncio
 
 from settings import *
 from translations import *
@@ -68,14 +69,72 @@ def update_volunteers(step: str):
 
     logging.warning(f"Volunteers list and schedule updated ({step}).")
 
+# send notifications to volunteers, return the number of sent notifications and the total number of volunteers
+async def send_notifications(curator_id: int):
+    # send notifications to all volunteers with roles kk.cleaning
+        volunteers = Volunteer.all(fields=['telegram_chat_id', 'language', 'volunteer_roles'])
+        notificatable_volunteers = [volunteer for volunteer in volunteers if 'kk.cleaning' in volunteer.roles]
+        curator = Volunteer.first(formula=match({'telegram_chat_id': curator_id}))
+        text = Notification.first(formula=match({'telegram_chat_id': curator_id})).custom_text
+        date = datetime.now().date() + timedelta(days=int(str(Notification.first(formula=match({'telegram_chat_id': curator_id})).date_threshold).split('+')[1]))
+        if not text:
+            text = default_notification_text[curator.language]
+
+        # count all selected volunteers
+        all_volunteers_count = len(notificatable_volunteers)
+        received_notifications_count = 0
+        # iterate over all volunteers and send notifications
+        for volunteer in notificatable_volunteers:
+            try:
+                role_switch = 'none'
+                if 'kk.medical' in volunteer.roles and 'kk.cleaning' in volunteer.roles:
+                    role_switch = 'both'
+                elif 'kk.medical' in volunteer.roles and 'kk.cleaning' not in volunteer.roles:
+                    role_switch = 'medical'
+                elif 'kk.cleaning' in volunteer.roles and 'kk.medical' not in volunteer.roles:
+                    role_switch = 'cleaning'
+
+                buttons = [
+                    [Button.inline(button_new_schedule[volunteer.language], data=f'new_schedule:{role_switch}')],
+                ]
+
+                await bot.send_message(volunteer.telegram_chat_id, text.format(format_date_by_language(date, volunteer.language)), buttons=buttons)
+                time.sleep(0.5) # avoid flood limits
+                received_notifications_count += 1
+            except Exception as err:
+                logging.error(f"Error sending notification to {volunteer.telegram_chat_id}: {err}")
+
+        return all_volunteers_count, received_notifications_count
+
 # populate volunteers list and schedule on bot start
 update_volunteers('start')
 
 # Update volunteers list and schedule at midnight
-@aiocron.crontab('0 0 * * *')
+@aiocron.crontab('0 0 * * *') # every day at midnight
 @logger
 def daily_schedule_update():
     update_volunteers('daily')
+
+# send personal notification to curators at their set time
+@logger
+@aiocron.crontab('0 */1 * * *') # every hour
+async def send_curator_notifications():
+    # find all volunteers with roles that contain 'kk.admin_curator'
+    volunteers = Volunteer.all(fields=['telegram_chat_id', 'volunteer_roles', 'language'])
+    curators = [volunteer for volunteer in volunteers if 'kk.admin_curator' in volunteer.roles]
+    for curator in curators:
+        curator_settings = Notification.first(formula=match({'telegram_chat_id': curator.telegram_chat_id}))
+        # check if the current time is equal to the time set in the notify_at field
+        if datetime.now().strftime('%H:%M') == curator_settings.notify_at:
+            # check if there is no volunteers scheduled for the date set in the date_threshold
+            date = datetime.now().date() + timedelta(days=int(str(curator_settings.date_threshold).split('+')[1]))
+            if not Schedule.first(formula=match({'date': date})):
+                logging.warning(f"No volunteers found for {date}, sending notification.")
+                buttons = [
+                    [Button.inline(button_curator_notifications_send[curator.language], data='notifications_send')],
+                    [Button.inline(button_curator_ignore[curator.language], data='back')]
+                ]
+                await bot.send_message(curator.telegram_chat_id, notifications_no_volunteers[curator.language].format(format_date_by_language(date, curator.language)), buttons=buttons)
 
 
 # function to format the date in the user's language
@@ -376,7 +435,7 @@ async def callback_handler(event):
         notification_date = datetime.now().date() + timedelta(days=int(str(currect_settings.date_threshold).split('+')[1]))
         await event.edit(
             notifications_menu[language].format(
-                str(currect_settings.custom_text).format(notification_date.strftime('%d.%m, %A')) if currect_settings.custom_text != '' else default_notification_text[language].format(notification_date.strftime('%d.%m, %A')),
+                str(currect_settings.custom_text).format(format_date_by_language(notification_date, language)) if currect_settings.custom_text != '' else default_notification_text[language].format(format_date_by_language(notification_date, language)),
                 currect_settings.notify_at,
                 currect_settings.date_threshold),
             buttons=buttons
@@ -443,6 +502,16 @@ async def callback_handler(event):
             'ru': 'день' if int(day) == 1 else 'дня' if int(day) < 5 else 'дней'
         }
         await event.edit(notifications_settings_date_threshold_success[language].format(day, day_variation[language]), buttons=[Button.inline(button_back[language], data='notifications')])
+
+
+
+
+
+
+    if data == 'notifications_send':
+        all_volunteers_count, received_notifications_count = await send_notifications(event.sender.id)
+        await event.edit(notifications_send_success[language].format(received_notifications_count, all_volunteers_count), buttons=[Button.inline(button_back[language], data='back')])
+
 
 
     # Get back
