@@ -425,6 +425,9 @@ async def callback_handler(event):
                 format_date_by_language(date, language)),
             buttons=[Button.inline(button_back[language], data='back')]
         )
+        if not topic_chat_id:
+            logging.error("Topic chat ID is not set, please set it in the settings.")
+            return
         await bot.send_message(
             topic_chat_id,
             add_schedule_topic_message.format(
@@ -479,6 +482,9 @@ async def callback_handler(event):
                 format_date_by_language(date, language)),
             buttons=[Button.inline(button_back[language], data='back')]
         )
+        if not topic_chat_id:
+            logging.error("Topic chat ID is not set, please set it in the settings.")
+            return
         await bot.send_message(
             topic_chat_id,
             delete_schedule_topic_message.format(
