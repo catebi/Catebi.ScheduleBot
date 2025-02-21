@@ -39,3 +39,13 @@ class Notification(Model):
         base_id = airtable_base_id
         table_name = 'notification'
         api_key = airtable_api_key
+
+class Settings(Model):
+    key = fields.TextField('key')
+    value = fields.NumberField('value')
+
+    class Meta:
+        memorize = True
+        base_id = airtable_base_id
+        table_name = 'settings'
+        api_key = airtable_api_key
