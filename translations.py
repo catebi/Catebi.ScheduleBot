@@ -45,9 +45,14 @@ languages = {
     'ru': "🇷🇺 Русский"
 }
 
-main_menu = {
-    'en': "Main menu 😽\n\nToday's volunteers: {}",
-    'ru': "Главное меню 😽\n\nДежурства сегодня: {}"
+main_menu_header = {
+    'en': "Main menu 😽",
+    'ru': "Главное меню 😽"
+}
+
+todays_volunteers = {
+    'en': "Today's volunteers: {}",
+    'ru': "Дежурные сегодня: {}"
 }
 
 new_schedule_type_prompt = {
@@ -70,6 +75,8 @@ add_schedule_success = {
     'ru': "Ура! Вы записаны: **{}** на **{}**!"
 }
 
+add_schedule_topic_message = "{} {} записалась/ся на дежурство по {} на **{}** 🎉"
+
 delete_schedule_prompt = {
     'en': "Choose a date you want to delete.",
     'ru': "Выберите дату, которую хотите удалить."
@@ -79,6 +86,8 @@ delete_schedule_success = {
     'en': "You have successfully deleted your **{}** registration for **{}**.",
     'ru': "Вы успешно удалили свою запись **{}** на **{}**."
 }
+
+delete_schedule_topic_message = "⛔{} {} удалил/а свою запись на дежурство по {} на **{}** 😢"
 
 my_schedule_prompt = {
     'en': "📅Your schedule.\nClick on a date to delete registration.",
@@ -91,7 +100,7 @@ my_schedule_delete_prompt = {
 }
 
 general_schedule = {
-    'en': """📋General schedule:
+    'en': """📆 CatFlat schedule
 
 Today's volunteers: {}
 
@@ -99,7 +108,7 @@ Other dates:
 {}
 """,
 
-    'ru': """📋Общее расписание:
+    'ru': """📆 Дежурства в кото-квартире
 
 Дежурства сегодня: {}
 
@@ -121,18 +130,18 @@ localized_dates = {
 }
 
 notifications_menu = {
-    'en': "🔔 Notifications menu.\n\nYour current settings are:\n__Notification text:__\n{}\n\n__Notify at: **{}**__\n__Date threshold: **{}**__",
-    'ru': "🔔 Меню уведомлений.\n\nВаши текущие настройки:\n__Текст уведомления:__\n{}\n\n__Время оповещения: **{}**__\n__Остаток дней до дежурства: **{}**__"
+    'en': "🔔 Notifications menu.\n\nYour current settings are:\n__Notification text:__\n{}\n\n__Notify at: **{}**__\n__Checking date range: **{}** (between today and **{}**)__",
+    'ru': "🔔 Меню уведомлений.\n\nВаши текущие настройки:\n__Текст уведомления:__\n{}\n\n__Время оповещения: **{}**__\n__Промежуток проверяемых дней: **{}** (между сегодня и **{}**)__"
 }
 
 default_notification_text = {
-    'en': "There's no volunteer assigned for **{}**. If you have 30-40 minutes, please sign up for a light cleaning. You need to clean the litter boxes, refresh the water, and add food, that's all!",
-    'ru': "На дату **{}** нет дежурного. Если у тебя есть 30-40 минут, пожалуйста, запишись на лайт вариант уборки. Нужно почистить лотки, обновить воду и досыпать корм, всё!"
+    'en': "There's no volunteer assigned for **{}**. If you have 1.5 hours, please sign up for a light cleaning. You need to clean the litter boxes, refresh the water, and add food, that's all!",
+    'ru': "На дату **{}** нет дежурного. Если у тебя есть 1.5 часа, пожалуйста, запишись на лайт вариант уборки. Нужно почистить лотки, обновить воду и досыпать корм, всё!"
 }
 
 notifications_settings_text_prompt = {
-    'en': "Please enter your custom notification text.\n\nYou can use curly braces (**{}**) to insert the date in your text.",
-    'ru': "Пожалуйста, введите свой текст уведомления.\n\nВы можете использовать фигурные скобочки (**{}**) для вставки даты в ваш текст."
+    'en': "Please enter your custom notification text.\n\nYou can use curly braces **{}** to insert the date in your text. The date will be inserted automatically, leave curly braces empty.",
+    'ru': "Пожалуйста, введите свой текст уведомления.\n\nВы можете использовать фигурные скобочки **{}** для вставки даты в ваш текст. Дата будет вставлена автоматически, оставьте фигурные скобочки пустыми."
 }
 
 notifications_settings_text_success = {
@@ -151,8 +160,8 @@ notifications_settings_notify_at_success = {
 }
 
 notifications_settings_date_threshold_prompt = {
-    'en': "Select the number of days in advance you want to receive a notification if there are no shifts scheduled.",
-    'ru': "Выберите количество дней, за которые вы хотите получать оповещение если нет назначенных смен."
+    'en': "Select the number of days in advance you want to receive a notification if there are no shifts scheduled.\nThis is a range between today and the selected threshold, you will receive a noification for the earliest empty date in this range.",
+    'ru': "Выберите количество дней, за которые вы хотите получать оповещение если нет назначенных смен.\nЭто диапазон между сегодняшней датой и выбранным остатком, вы получите уведомление для ближайшей незанятой даты в этом диапазоне."
 }
 
 notifications_settings_date_threshold_success = {
@@ -256,4 +265,14 @@ error_not_registered = {
 error_no_roles = {
     'en': "Oh! Looks like you don't have the necessary roles to use this bot.\nPlease check in with the [volunteer bot](https://t.me/catebi_volunteer_bot) to get started!",
     'ru': "Ой! Похоже, у вас нет необходимых ролей для использования этого бота.\nПожалуйста, отметьтесь в [волонтерском боте](https://t.me/catebi_volunteer_bot), чтобы начать!"
+}
+
+error_not_admin = {
+    'en': "This command is only available to administrators.",
+    'ru': "Эта команда доступна только администраторам."
+}
+
+error_custom_text = {
+    'en': "Your message can't start with a slash, please try again.",
+    'ru': "Ваше сообщение не может начинаться со слеша, пожалуйста, попробуйте еще раз."
 }

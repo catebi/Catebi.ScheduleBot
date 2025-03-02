@@ -1,8 +1,11 @@
-from telethon import TelegramClient, events, Button
+from telethon import TelegramClient, events, Button, errors
+from telethon.tl.functions.messages import SendMessageRequest
+from telethon.tl.types import InputReplyToMessage
+
 import logging
 import os, time
 from pyairtable import Api
-from pyairtable.formulas import match, FunctionCall
+from pyairtable.formulas import match
 from datetime import datetime, timedelta
 from babel.dates import format_date
 
@@ -32,7 +35,7 @@ def logger(func):
 
 os.environ['TZ'] = 'Asia/Tbilisi'
 time.tzset()
-logging.warning(f"Timezone set to {os.environ['TZ']}, time is {datetime.now()}.")
+logging.info(f"Timezone set to {os.environ['TZ']}, time is {datetime.now()}.")
 
 # Initialize Airtable API
 api = Api(api_key=airtable_api_key)
@@ -44,12 +47,15 @@ today_volunteers = None
 scheduled_dates = None
 today_volunteers_list = None
 dates_list = None
+topic_chat_id = None
+cleaning_topic_id = None
+medical_topic_id = None
 
 # region Functions
 
 # update volunteers list and schedule
-def update_volunteers(step: str):
-    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list
+async def update_volunteers(step: str):
+    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list, topic_chat_id, cleaning_topic_id, medical_topic_id
     today_volunteers = Schedule.all(fields=['volunteer'], formula=match({'date': datetime.now().date()}))
     scheduled_dates = Schedule.all(fields=['date', 'volunteer', 'telegram', 'type'], sort=['date'], formula=match({'date': (">=", datetime.now().date())}))
 
@@ -67,13 +73,57 @@ def update_volunteers(step: str):
         else:
             dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {date.volunteer.telegram if date.type == 'cleaning' else '🏥'+date.volunteer.telegram}")
 
-    logging.warning(f"Volunteers list and schedule updated ({step}).")
+    logging.info(f"Volunteers list and schedule updated ({step}).")
+
+    # update messages in topics
+    settings = Settings.all()
+    settings_dict = {setting.key: setting.value for setting in settings}
+
+    if not settings_dict.get('topic_chat_id'):
+        logging.error("Topic chat ID is not set, please set it in the settings.")
+        return
+
+    topic_chat_id = settings_dict.get('topic_chat_id')
+    cleaning_topic_id = settings_dict.get('cleaning_topic_id')
+    medical_topic_id = settings_dict.get('medical_topic_id')
+    last_pinned_general_message_id = settings_dict.get('last_pinned_general_message_id')
+    last_pinned_cleaning_message_id = settings_dict.get('last_pinned_cleaning_message_id')
+    last_pinned_medical_message_id = settings_dict.get('last_pinned_medical_message_id')
+
+    messages = [
+        (last_pinned_general_message_id, 'last_pinned_general_message_id', None),
+        (last_pinned_cleaning_message_id, 'last_pinned_cleaning_message_id', cleaning_topic_id),
+        (last_pinned_medical_message_id, 'last_pinned_medical_message_id', medical_topic_id)
+    ]
+
+    for message_id, setting_key, topic in messages:
+        if not message_id:
+            pin_message = await bot.send_message(
+                topic_chat_id,
+                general_schedule['ru'].format(
+                    ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
+                    '\n'.join(dates_list)
+                ),
+                reply_to=topic
+            )
+            await bot.pin_message(topic_chat_id, pin_message.id)
+            setting = Settings.first(formula=match({'key': setting_key}))
+            setting.value = pin_message.id
+            setting.save()
+
+    if step != 'startup':
+        for id, setting_key, _ in messages:
+            await bot.edit_message(topic_chat_id, id, general_schedule['ru'].format(
+                ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
+                '\n'.join(dates_list)
+            ))
+            await asyncio.sleep(0.5) # avoid flood limits
 
 # send notifications to volunteers, return the number of sent notifications and the total number of volunteers
 async def send_notifications(curator_id: int):
     # send notifications to all volunteers with roles kk.cleaning
         volunteers = Volunteer.all(fields=['telegram_chat_id', 'language', 'volunteer_roles'])
-        notificatable_volunteers = [volunteer for volunteer in volunteers if 'kk.cleaning' in volunteer.roles]
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk.cleaning' in volunteer.roles]
         curator = Volunteer.first(formula=match({'telegram_chat_id': curator_id}))
         text = Notification.first(formula=match({'telegram_chat_id': curator_id})).custom_text
         date = datetime.now().date() + timedelta(days=int(str(Notification.first(formula=match({'telegram_chat_id': curator_id})).date_threshold).split('+')[1]))
@@ -81,10 +131,10 @@ async def send_notifications(curator_id: int):
             text = default_notification_text[curator.language]
 
         # count all selected volunteers
-        all_volunteers_count = len(notificatable_volunteers)
+        all_volunteers_count = len(notifiable_volunteers)
         received_notifications_count = 0
         # iterate over all volunteers and send notifications
-        for volunteer in notificatable_volunteers:
+        for volunteer in notifiable_volunteers:
             try:
                 role_switch = 'none'
                 if 'kk.medical' in volunteer.roles and 'kk.cleaning' in volunteer.roles:
@@ -106,35 +156,35 @@ async def send_notifications(curator_id: int):
 
         return all_volunteers_count, received_notifications_count
 
-# populate volunteers list and schedule on bot start
-update_volunteers('start')
-
 # Update volunteers list and schedule at midnight
-@aiocron.crontab('0 0 * * *') # every day at midnight
 @logger
-def daily_schedule_update():
-    update_volunteers('daily')
+@aiocron.crontab('0 0 * * *') # every day at midnight
+async def daily_schedule_update():
+    await update_volunteers('daily')
 
 # send personal notification to curators at their set time
 @logger
-@aiocron.crontab('0 */1 * * *') # every hour
+@aiocron.crontab('* */1 * * *') # every hour
 async def send_curator_notifications():
     # find all volunteers with roles that contain 'kk.admin_curator'
-    volunteers = Volunteer.all(fields=['telegram_chat_id', 'volunteer_roles', 'language'])
+    volunteers = Volunteer.all(fields=['telegram', 'telegram_chat_id', 'volunteer_roles', 'language'])
     curators = [volunteer for volunteer in volunteers if 'kk.admin_curator' in volunteer.roles]
     for curator in curators:
         curator_settings = Notification.first(formula=match({'telegram_chat_id': curator.telegram_chat_id}))
         # check if the current time is equal to the time set in the notify_at field
         if datetime.now().strftime('%H:%M') == curator_settings.notify_at:
-            # check if there is no volunteers scheduled for the date set in the date_threshold
-            date = datetime.now().date() + timedelta(days=int(str(curator_settings.date_threshold).split('+')[1]))
-            if not Schedule.first(formula=match({'date': date})):
-                logging.warning(f"No volunteers found for {date}, sending notification.")
-                buttons = [
-                    [Button.inline(button_curator_notifications_send[curator.language], data='notifications_send')],
-                    [Button.inline(button_curator_ignore[curator.language], data='back')]
-                ]
-                await bot.send_message(curator.telegram_chat_id, notifications_no_volunteers[curator.language].format(format_date_by_language(date, curator.language)), buttons=buttons)
+            # check if there are no volunteers scheduled for any date between today and the threshold date
+            start_date = datetime.now().date()
+            end_date = start_date + timedelta(days=int(str(curator_settings.date_threshold).split('+')[1]))
+            for date in (start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)):
+                if not Schedule.first(formula=match({'date': date})):
+                    logging.info(f"No volunteers found for {date} for {curator.telegram}, sending notification.")
+                    buttons = [
+                        [Button.inline(button_curator_notifications_send[curator.language], data='notifications_send')],
+                        [Button.inline(button_curator_ignore[curator.language], data='back')]
+                    ]
+                    await bot.send_message(curator.telegram_chat_id, notifications_no_volunteers[curator.language].format(format_date_by_language(date, curator.language)), buttons=buttons)
+                    break  # Send only one notification for the closest date and break the loop, comment this to send notifications for all dates
 
 
 # function to format the date in the user's language
@@ -143,6 +193,39 @@ def format_date_by_language(date: datetime, language: str):
     return f"{formatted_date.split(' ')[0]} {formatted_date.split(' ')[1].capitalize()}" # capitalize the first letter of the day of the week
 
 
+
+# handle custom notification text setting
+custom_text_setting = {}
+@bot.on(events.NewMessage())
+@logger
+async def notifications_handler(event):
+    if event.sender.id not in custom_text_setting:
+        return
+
+    logging.info(f"Custom text setting: {event.sender.id}, {event.message.message}")
+
+    admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
+
+    custom_text = str(event.message.message)
+    if custom_text.startswith('/'):
+        await event.respond(error_custom_text[admin.volunteer.language])
+        raise events.StopPropagation
+
+    if '{' in custom_text and '}' in custom_text:
+        # replace everything within curly braces with empty string
+        pre_curly, _, _ = custom_text.partition('{')
+        _, _, post_curly = custom_text.partition('}')
+        custom_text = pre_curly + r'{}' + post_curly
+
+    admin.custom_text = custom_text
+    admin.save()
+
+    prompt = custom_text_setting[event.sender.id]['prompt']
+
+    await prompt.edit(prompt.message, buttons=None) # remove buttons from the prompt to avoid multiple clicks
+    await event.respond(notifications_settings_text_success[admin.volunteer.language], buttons=[Button.inline(button_back[admin.volunteer.language], data='notifications')])
+
+    custom_text_setting.pop(event.sender.id)
 
 # region Commands
 
@@ -192,6 +275,31 @@ async def settings_handler(event):
     # show language selection menu
     await start_handler(event, check_user=False)
 
+@bot.on(events.NewMessage(pattern='/set_cleaning_topic|/set_medical_topic'))
+@logger
+async def set_topic_handler(event):
+    user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
+    if not user:
+        await event.respond(error_not_registered[user.language])
+        return
+
+    if 'kk.admin_curator' not in user.roles:
+        await event.respond(error_not_admin[user.language])
+        return
+
+    # set topic type
+    topic_type = 'cleaning' if event.pattern_match.group(0) == '/set_cleaning_topic' else 'medical'
+    settings_topic_chat_id = Settings.first(formula=match({'key': 'topic_chat_id'}))
+    if not settings_topic_chat_id.value: # check if topic chat id is set
+        settings_topic_chat_id.value = event.chat.id
+        settings_topic_chat_id.save()
+
+    settings_topic_id = Settings.first(formula=match({'key': f'{topic_type}_topic_id'})) # save new topic id
+    settings_topic_id.value = event.message.reply_to_msg_id
+    settings_topic_id.save()
+
+    await bot.send_message(event.sender.id, f"{topic_type.capitalize()} topic set successfully.")
+
 # region Menu
 
 @bot.on(events.NewMessage(pattern='/schedule'))
@@ -226,38 +334,17 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
         buttons.append([Button.inline(button_notifications[language], data='notifications')])
 
     if update:
-        await event.edit(main_menu[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
+        await event.edit(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
         return
 
-    await event.respond(main_menu[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
-
-# handle custom notification text setting
-custom_text_setting = {}
-@bot.on(events.NewMessage())
-@logger
-async def notifications_handler(event):
-    if event.sender.id not in custom_text_setting:
-        return
-
-    logging.warning(f"Custom text setting: {event.sender.id}, {event.message.message}")
-
-    admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
-    admin.custom_text = event.message.message
-    admin.save()
-
-    prompt = custom_text_setting[event.sender.id]['prompt']
-
-    await prompt.edit(prompt.message, buttons=None) # remove buttons from the prompt to avoid multiple clicks
-    await event.respond(notifications_settings_text_success[admin.volunteer.language], buttons=[Button.inline(button_back[admin.volunteer.language], data='notifications')])
-
-    custom_text_setting.pop(event.sender.id)
+    await event.respond(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
 
 
 # region Buttons
 @bot.on(events.CallbackQuery())
 @logger
 async def callback_handler(event):
-    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list, custom_text_setting
+    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list, custom_text_setting, topic_chat_id, cleaning_topic_id, medical_topic_id
 
     data = event.data.decode("utf-8")
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
@@ -331,12 +418,25 @@ async def callback_handler(event):
             volunteer=user,
             type=type
         ).save()
-        update_volunteers('add_schedule')
+        await update_volunteers('add_schedule')
         await event.edit(
             add_schedule_success[language].format(
                 button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
                 format_date_by_language(date, language)),
             buttons=[Button.inline(button_back[language], data='back')]
+        )
+        if not topic_chat_id:
+            logging.error("Topic chat ID is not set, please set it in the settings.")
+            return
+        await bot.send_message(
+            topic_chat_id,
+            add_schedule_topic_message.format(
+                '🏥' if type == 'medical' else '🧹',
+                user.telegram,
+                'медуходу' if type == 'medical' else 'уборке',
+                'сегодня' if date == datetime.now().date() else 'завтра' if date == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru')
+            ),
+            reply_to=cleaning_topic_id if type == 'cleaning' else medical_topic_id
         )
 
     # View my scheduled dates
@@ -375,12 +475,25 @@ async def callback_handler(event):
             unwanted_schedule.delete()
         else:
             logging.error(f"Record not found: {event.sender.id}, {date}, {type}; probably already deleted.")
-        update_volunteers('delete_schedule')
+        await update_volunteers('delete_schedule')
         await event.edit(
             delete_schedule_success[language].format(
                 button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
                 format_date_by_language(date, language)),
             buttons=[Button.inline(button_back[language], data='back')]
+        )
+        if not topic_chat_id:
+            logging.error("Topic chat ID is not set, please set it in the settings.")
+            return
+        await bot.send_message(
+            topic_chat_id,
+            delete_schedule_topic_message.format(
+                '🏥' if type == 'medical' else '🧹',
+                user.telegram,
+                'медуходу' if type == 'medical' else 'уборке',
+                'сегодня' if date == datetime.now().date() else 'завтра' if date == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru')
+            ),
+            reply_to=cleaning_topic_id if type == 'cleaning' else medical_topic_id
         )
 
 
@@ -437,7 +550,9 @@ async def callback_handler(event):
             notifications_menu[language].format(
                 str(currect_settings.custom_text).format(format_date_by_language(notification_date, language)) if currect_settings.custom_text != '' else default_notification_text[language].format(format_date_by_language(notification_date, language)),
                 currect_settings.notify_at,
-                currect_settings.date_threshold),
+                currect_settings.date_threshold,
+                format_date_by_language(notification_date, language)
+            ),
             buttons=buttons
         )
 
@@ -518,8 +633,10 @@ async def callback_handler(event):
     if data == 'back':
         await schedule_handler(event, language, update=True)
 
-def main():
-    bot.run_until_disconnected()
+async def main():
+    asyncio.Task(update_volunteers('startup'))
+    await bot.run_until_disconnected()
 
 if __name__ == '__main__':
-    main()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
