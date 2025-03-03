@@ -94,7 +94,7 @@ async def update_volunteers(step: str):
         (last_pinned_medical_message_id, 'last_pinned_medical_message_id', medical_topic_id)
     ]
 
-    topic_entity = await bot.get_entity(topic_chat_id)
+    topic_entity = await bot.get_entity(int('-100'+str(topic_chat_id)))
     topic_input_entity = utils.get_input_channel(utils.get_input_peer(topic_entity))
 
     for message_id, setting_key, topic in messages:
