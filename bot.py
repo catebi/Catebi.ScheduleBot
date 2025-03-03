@@ -1,6 +1,4 @@
-from telethon import TelegramClient, events, Button, errors
-from telethon.tl.functions.messages import SendMessageRequest
-from telethon.tl.types import InputReplyToMessage
+from telethon import TelegramClient, events, Button, utils
 
 import logging
 import os, time
@@ -47,7 +45,7 @@ today_volunteers = None
 scheduled_dates = None
 today_volunteers_list = None
 dates_list = None
-topic_chat_id = None
+topic_input_entity = None
 cleaning_topic_id = None
 medical_topic_id = None
 
@@ -55,7 +53,7 @@ medical_topic_id = None
 
 # update volunteers list and schedule
 async def update_volunteers(step: str):
-    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list, topic_chat_id, cleaning_topic_id, medical_topic_id
+    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list, topic_input_entity, cleaning_topic_id, medical_topic_id
     today_volunteers = Schedule.all(fields=['volunteer'], formula=match({'date': datetime.now().date()}))
     scheduled_dates = Schedule.all(fields=['date', 'volunteer', 'telegram', 'type'], sort=['date'], formula=match({'date': (">=", datetime.now().date())}))
 
@@ -96,24 +94,27 @@ async def update_volunteers(step: str):
         (last_pinned_medical_message_id, 'last_pinned_medical_message_id', medical_topic_id)
     ]
 
+    topic_entity = await bot.get_entity(topic_chat_id)
+    topic_input_entity = utils.get_input_channel(utils.get_input_peer(topic_entity))
+
     for message_id, setting_key, topic in messages:
         if not message_id:
             pin_message = await bot.send_message(
-                topic_chat_id,
+                topic_input_entity,
                 general_schedule['ru'].format(
                     ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
                     '\n'.join(dates_list)
                 ),
                 reply_to=topic
             )
-            await bot.pin_message(topic_chat_id, pin_message.id)
+            await bot.pin_message(topic_input_entity, pin_message.id)
             setting = Settings.first(formula=match({'key': setting_key}))
             setting.value = pin_message.id
             setting.save()
 
     if step != 'startup':
         for id, setting_key, _ in messages:
-            await bot.edit_message(topic_chat_id, id, general_schedule['ru'].format(
+            await bot.edit_message(topic_input_entity, id, general_schedule['ru'].format(
                 ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
                 '\n'.join(dates_list)
             ))
@@ -344,7 +345,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
 @bot.on(events.CallbackQuery())
 @logger
 async def callback_handler(event):
-    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list, custom_text_setting, topic_chat_id, cleaning_topic_id, medical_topic_id
+    global today_volunteers, scheduled_dates, today_volunteers_list, dates_list, custom_text_setting, topic_input_entity, cleaning_topic_id, medical_topic_id
 
     data = event.data.decode("utf-8")
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
@@ -425,11 +426,11 @@ async def callback_handler(event):
                 format_date_by_language(date, language)),
             buttons=[Button.inline(button_back[language], data='back')]
         )
-        if not topic_chat_id:
+        if not topic_input_entity:
             logging.error("Topic chat ID is not set, please set it in the settings.")
             return
         await bot.send_message(
-            topic_chat_id,
+            topic_input_entity,
             add_schedule_topic_message.format(
                 '🏥' if type == 'medical' else '🧹',
                 user.telegram,
@@ -482,11 +483,11 @@ async def callback_handler(event):
                 format_date_by_language(date, language)),
             buttons=[Button.inline(button_back[language], data='back')]
         )
-        if not topic_chat_id:
+        if not topic_input_entity:
             logging.error("Topic chat ID is not set, please set it in the settings.")
             return
         await bot.send_message(
-            topic_chat_id,
+            topic_input_entity,
             delete_schedule_topic_message.format(
                 '🏥' if type == 'medical' else '🧹',
                 user.telegram,
