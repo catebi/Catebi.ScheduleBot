@@ -17,12 +17,6 @@ from airtable_model import *
 logging.basicConfig(format='[%(levelname)s] %(message)s',
                     level=logging.WARNING)
 
-# TODO:
-# - Implement an admin interface to manage notifications
-# - Implement a notification system to remind volunteers about their scheduled dates
-# - Implement a notification to remind admins there are no volunteers scheduled for the next day
-# - Add the ability to change notification text and timing, with default fallbacks
-
 def logger(func):
     def decorator(*args, **kwargs):
         try:
@@ -71,14 +65,14 @@ async def update_volunteers(step: str):
         else:
             dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {date.volunteer.telegram if date.type == 'cleaning' else '🏥'+date.volunteer.telegram}")
 
-    logging.info(f"Volunteers list and schedule updated ({step}).")
+    logging.info(f"<{step}> Volunteers list and schedule updated.")
 
     # update messages in topics
     settings = Settings.all()
     settings_dict = {setting.key: setting.value for setting in settings}
 
     if not settings_dict.get('topic_chat_id'):
-        logging.error("Topic chat ID is not set, please set it in the settings.")
+        logging.error(f"<{step}> Topic chat ID is not set, please set it in the settings.")
         return
 
     topic_chat_id = settings_dict.get('topic_chat_id')
@@ -94,8 +88,13 @@ async def update_volunteers(step: str):
         (last_pinned_medical_message_id, 'last_pinned_medical_message_id', medical_topic_id)
     ]
 
-    topic_entity = await bot.get_entity(int('-100'+str(topic_chat_id)))
-    topic_input_entity = utils.get_input_channel(utils.get_input_peer(topic_entity))
+    try:
+        marked_topic_chat_id = int('-100'+str(topic_chat_id))
+        topic_entity = await bot.get_entity(marked_topic_chat_id)
+        topic_input_entity = utils.get_input_channel(utils.get_input_peer(topic_entity))
+    except ValueError as err:
+        logging.error(f"<{step}> Error getting topic chat entity, check if the chat ID is correct and bot is in the chat:\nmarked_topic_chat_id: {marked_topic_chat_id}\n{err}")
+        return
 
     for message_id, setting_key, topic in messages:
         if not message_id:
@@ -119,6 +118,8 @@ async def update_volunteers(step: str):
                 '\n'.join(dates_list)
             ))
             await asyncio.sleep(0.5) # avoid flood limits
+
+    logging.info(f"<{step}> Messages in topics updated.")
 
 # send notifications to volunteers, return the number of sent notifications and the total number of volunteers
 async def send_notifications(curator_id: int):
