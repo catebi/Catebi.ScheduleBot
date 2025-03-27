@@ -22,13 +22,19 @@ def log_airtable_request(func):
     def wrapper(*args, **kwargs):
         start_time = time.time()
         try:
+            # Get the model class name and method name
+            method_name = func.__name__
+            model_class = "Unknown"
+            
+            # Handle both class methods and instance methods
+            if args and isinstance(args[0], Model):
+                model_class = args[0].__class__.__name__
+            elif args and isinstance(args[0], type) and issubclass(args[0], Model):
+                model_class = args[0].__name__
+            
             result = func(*args, **kwargs)
             end_time = time.time()
             duration = round((end_time - start_time) * 1000, 2)  # Convert to milliseconds
-            
-            # Get the model class name and method name
-            model_class = args[0].__class__.__name__ if args else "Unknown"
-            method_name = func.__name__
             
             # Log the request details
             logging.info(
