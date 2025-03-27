@@ -18,6 +18,25 @@ logging.basicConfig(
     ]
 )
 
+def get_model_class(func, args):
+    """Helper function to determine the model class from the function and arguments"""
+    # If it's a bound method, get the class from __self__
+    if hasattr(func, '__self__'):
+        if isinstance(func.__self__, type):
+            return func.__self__.__name__
+        elif isinstance(func.__self__, Model):
+            return func.__self__.__class__.__name__
+    
+    # If it's a class method, args[0] should be the class
+    if args and isinstance(args[0], type) and issubclass(args[0], Model):
+        return args[0].__name__
+    
+    # If it's an instance method, args[0] should be the instance
+    if args and isinstance(args[0], Model):
+        return args[0].__class__.__name__
+    
+    return "Unknown"
+
 def log_airtable_request(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -25,16 +44,7 @@ def log_airtable_request(func):
         try:
             # Get the model class name and method name
             method_name = func.__name__
-            model_class = "Unknown"
-            
-            # Handle both class methods and instance methods
-            if args:
-                if isinstance(args[0], Model):
-                    model_class = args[0].__class__.__name__
-                elif isinstance(args[0], type) and issubclass(args[0], Model):
-                    model_class = args[0].__name__
-                elif hasattr(func, '__self__') and isinstance(func.__self__, type):
-                    model_class = func.__self__.__name__
+            model_class = get_model_class(func, args)
             
             result = func(*args, **kwargs)
             end_time = time.time()
