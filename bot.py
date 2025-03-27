@@ -13,6 +13,7 @@ import asyncio
 from settings import *
 from translations import *
 from airtable_model import *
+import airtable_logger  # Import the new logging module
 
 logging.basicConfig(format='[%(levelname)s] %(message)s',
                     level=logging.WARNING)

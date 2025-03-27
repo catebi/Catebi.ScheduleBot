@@ -13,6 +13,12 @@ RUN apt-get update && \
 # Set the working directory inside the container
 WORKDIR /app
 
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Create volume for logs
+VOLUME /app/logs
+
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 

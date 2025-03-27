@@ -16,3 +16,5 @@ services:
       - BOT_TOKEN=${BOT_TOKEN}
       - AIRTABLE_APIKEY=${AIRTABLE_APIKEY}
       - AIRTABLE_BASEID=${AIRTABLE_BASEID}
+    volumes:
+      - ./logs:/app/logs
