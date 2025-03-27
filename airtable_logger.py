@@ -28,10 +28,13 @@ def log_airtable_request(func):
             model_class = "Unknown"
             
             # Handle both class methods and instance methods
-            if args and isinstance(args[0], Model):
-                model_class = args[0].__class__.__name__
-            elif args and isinstance(args[0], type) and issubclass(args[0], Model):
-                model_class = args[0].__name__
+            if args:
+                if isinstance(args[0], Model):
+                    model_class = args[0].__class__.__name__
+                elif isinstance(args[0], type) and issubclass(args[0], Model):
+                    model_class = args[0].__name__
+                elif hasattr(func, '__self__') and isinstance(func.__self__, type):
+                    model_class = func.__self__.__name__
             
             result = func(*args, **kwargs)
             end_time = time.time()
