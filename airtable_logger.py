@@ -3,6 +3,7 @@ import time
 import os
 from functools import wraps
 from pyairtable.orm import Model
+from airtable_model import Volunteer, Schedule, Notification, Settings
 
 # Create logs directory if it doesn't exist
 os.makedirs('logs', exist_ok=True)
@@ -52,16 +53,20 @@ def log_airtable_request(func):
             raise
     return wrapper
 
-# Monkey patch the Model class methods to add logging
+# Monkey patch the model class methods to add logging
 def patch_model_methods():
     methods_to_patch = [
         'all', 'first', 'get', 'save', 'delete', 'create', 'update'
     ]
     
-    for method_name in methods_to_patch:
-        if hasattr(Model, method_name):
-            original_method = getattr(Model, method_name)
-            setattr(Model, method_name, log_airtable_request(original_method))
+    # List of model classes to patch
+    model_classes = [Volunteer, Schedule, Notification, Settings]
+    
+    for model_class in model_classes:
+        for method_name in methods_to_patch:
+            if hasattr(model_class, method_name):
+                original_method = getattr(model_class, method_name)
+                setattr(model_class, method_name, log_airtable_request(original_method))
 
 # Call this function when the module is imported
 patch_model_methods() 
