@@ -177,7 +177,7 @@ async def daily_schedule_update():
 @aiocron.crontab('* */1 * * *') # every hour
 @airtable_context('send_curator_notifications')
 async def send_curator_notifications():
-    global _last_curator_check
+    global _last_curator_check, _curator_cache
     
     current_time = time.time()
     
