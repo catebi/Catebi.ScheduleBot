@@ -29,27 +29,42 @@ def get_calling_function():
     # Skip the first 3 frames (this function, wrapper, and the Airtable method)
     frame = current_frame.f_back.f_back.f_back
     while frame:
-        if frame.f_code.co_filename.endswith('bot.py'):
-            # If we're at module level, try to get the context
-            if frame.f_code.co_name == '<module>':
-                # Look at the code context to understand what's happening
-                context = inspect.getframeinfo(frame).code_context
-                if context:
-                    # Try to find a meaningful line from the context
-                    for line in context:
-                        if line and any(keyword in line for keyword in [
-                            'update_volunteers', 'send_notifications', 'schedule_handler', 
-                            'help_handler', 'callback_handler', 'start_handler', 'send_curator_notifications'
-                        ]):
-                            return line.strip()
+        try:
+            # Get the frame info
+            frame_info = inspect.getframeinfo(frame)
+            filename = frame_info.filename
             
-            # If we found a function name, return it
-            if frame.f_code.co_name != '<module>':
-                return frame.f_code.co_name
-            
-            # If we're still at module level, look at the previous frame
-            frame = frame.f_back
-        else:
+            # Only look at bot.py frames
+            if filename.endswith('bot.py'):
+                # Get the function name
+                func_name = frame.f_code.co_name
+                
+                # If we're at module level, try to get the context
+                if func_name == '<module>':
+                    # Look at the code context to understand what's happening
+                    context = frame_info.code_context
+                    if context:
+                        # Try to find a meaningful line from the context
+                        for line in context:
+                            if line:
+                                # Look for function calls in the context
+                                for keyword in [
+                                    'update_volunteers', 'send_notifications', 'schedule_handler', 
+                                    'help_handler', 'callback_handler', 'start_handler', 'send_curator_notifications',
+                                    'daily_schedule_update', 'send_curator_notifications'
+                                ]:
+                                    if keyword in line:
+                                        return keyword
+                
+                # If we found a function name, return it
+                if func_name != '<module>':
+                    return func_name
+                
+                # If we're still at module level, look at the previous frame
+                frame = frame.f_back
+            else:
+                frame = frame.f_back
+        except Exception:
             frame = frame.f_back
     
     return "Unknown"
