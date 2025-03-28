@@ -21,14 +21,19 @@ logging.basicConfig(
 
 def get_calling_function():
     """Get the name of the function that called the Airtable API"""
-    stack = inspect.stack()
+    # Get the current frame
+    current_frame = inspect.currentframe()
+    if not current_frame:
+        return "Unknown"
+    
     # Skip the first 3 frames (this function, wrapper, and the Airtable method)
-    for frame in stack[3:]:
-        if frame.filename.endswith('bot.py'):
-            # If we're at module level, try to get the context from the previous frame
-            if frame.function == '<module>':
+    frame = current_frame.f_back.f_back.f_back
+    while frame:
+        if frame.f_code.co_filename.endswith('bot.py'):
+            # If we're at module level, try to get the context
+            if frame.f_code.co_name == '<module>':
                 # Look at the code context to understand what's happening
-                context = frame.code_context
+                context = inspect.getframeinfo(frame).code_context
                 if context:
                     # Try to find a meaningful line from the context
                     for line in context:
@@ -39,25 +44,13 @@ def get_calling_function():
                             return line.strip()
             
             # If we found a function name, return it
-            if frame.function != '<module>':
-                return frame.function
+            if frame.f_code.co_name != '<module>':
+                return frame.f_code.co_name
             
             # If we're still at module level, look at the previous frame
-            prev_frame = frame.f_back
-            if prev_frame and prev_frame.f_code.co_filename.endswith('bot.py'):
-                if prev_frame.function != '<module>':
-                    return prev_frame.function
-                
-                # Look at the previous frame's context
-                prev_context = prev_frame.f_code.co_code
-                if prev_context:
-                    # Try to find a meaningful line from the previous frame's context
-                    for line in prev_frame.code_context or []:
-                        if line and any(keyword in line for keyword in [
-                            'update_volunteers', 'send_notifications', 'schedule_handler', 
-                            'help_handler', 'callback_handler', 'start_handler', 'send_curator_notifications'
-                        ]):
-                            return line.strip()
+            frame = frame.f_back
+        else:
+            frame = frame.f_back
     
     return "Unknown"
 
@@ -91,6 +84,7 @@ def log_airtable_request(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
+        calling_function = "Unknown"  # Initialize with default value
         try:
             # Get the model class name and method name
             method_name = func.__name__
