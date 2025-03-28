@@ -2,7 +2,7 @@ import logging
 import time
 import os
 import threading
-from contextlib import contextmanager
+import asyncio
 from functools import wraps
 from pyairtable.orm import Model
 from airtable_model import Volunteer, Schedule, Notification, Settings
@@ -27,13 +27,20 @@ def airtable_context(name):
     """Decorator to set context for Airtable operations"""
     def decorator(func):
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        async def async_wrapper(*args, **kwargs):
+            _thread_local.context = name
+            try:
+                return await func(*args, **kwargs)
+            finally:
+                _thread_local.context = None
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
             _thread_local.context = name
             try:
                 return func(*args, **kwargs)
             finally:
                 _thread_local.context = None
-        return wrapper
+        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
     return decorator
 
 def get_model_class(func, args):
