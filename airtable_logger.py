@@ -25,6 +25,15 @@ def get_calling_function():
     # Skip the first 3 frames (this function, wrapper, and the Airtable method)
     for frame in stack[3:]:
         if frame.filename.endswith('bot.py'):
+            # If we're at module level, try to get the context from the previous frame
+            if frame.function == '<module>':
+                # Look at the code context to understand what's happening
+                context = frame.code_context
+                if context:
+                    # Try to find a meaningful line from the context
+                    for line in context:
+                        if line and any(keyword in line for keyword in ['update_volunteers', 'send_notifications', 'schedule_handler', 'help_handler']):
+                            return line.strip()
             return frame.function
     return "Unknown"
 
