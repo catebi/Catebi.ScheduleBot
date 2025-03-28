@@ -1,7 +1,8 @@
 import logging
 import time
 import os
-import inspect
+import threading
+from contextlib import contextmanager
 from functools import wraps
 from pyairtable.orm import Model
 from airtable_model import Volunteer, Schedule, Notification, Settings
@@ -14,70 +15,29 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('logs/airtable.log')
+        logging.FileHandler('airtable.log'),
+        logging.StreamHandler()
     ]
 )
 
-def get_calling_function():
-    """Get the name of the function that called the Airtable API"""
-    # Get the current frame
-    current_frame = inspect.currentframe()
-    if not current_frame:
-        return "Unknown"
-    
-    # Skip the first 3 frames (this function, wrapper, and the Airtable method)
-    frame = current_frame.f_back.f_back.f_back
-    while frame:
-        try:
-            # Get the frame info
-            frame_info = inspect.getframeinfo(frame)
-            filename = frame_info.filename
-            
-            # Only look at bot.py frames
-            if filename.endswith('bot.py'):
-                # Get the function name
-                func_name = frame.f_code.co_name
-                
-                # If we're at module level, try to get the context
-                if func_name == '<module>':
-                    # Look at the code context to understand what's happening
-                    context = frame_info.code_context
-                    if context:
-                        # Try to find a meaningful line from the context
-                        for line in context:
-                            if line:
-                                # Look for function calls in the context
-                                for keyword in [
-                                    'update_volunteers', 'send_notifications', 'schedule_handler', 
-                                    'help_handler', 'callback_handler', 'start_handler', 'send_curator_notifications',
-                                    'daily_schedule_update', 'send_curator_notifications'
-                                ]:
-                                    if keyword in line:
-                                        return keyword
-                
-                # If we found a function name, return it
-                if func_name != '<module>':
-                    return func_name
-                
-                # If we're still at module level, look at the previous frame
-                frame = frame.f_back
-            else:
-                frame = frame.f_back
-        except Exception:
-            frame = frame.f_back
-    
-    return "Unknown"
+# Thread-local storage for context
+_thread_local = threading.local()
+
+def airtable_context(name):
+    """Decorator to set context for Airtable operations"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            _thread_local.context = name
+            try:
+                return func(*args, **kwargs)
+            finally:
+                _thread_local.context = None
+        return wrapper
+    return decorator
 
 def get_model_class(func, args):
     """Helper function to determine the model class from the function and arguments"""
-    # Debug logging
-    logging.debug(f"Function: {func.__name__}")
-    logging.debug(f"Function type: {type(func)}")
-    logging.debug(f"Has __self__: {hasattr(func, '__self__')}")
-    if hasattr(func, '__self__'):
-        logging.debug(f"__self__ type: {type(func.__self__)}")
-    
     # If it's a bound method, get the class from __self__
     if hasattr(func, '__self__'):
         if isinstance(func.__self__, type):
@@ -95,41 +55,57 @@ def get_model_class(func, args):
     
     return "Unknown"
 
+def format_request_params(args, kwargs):
+    """Format request parameters for logging"""
+    params = []
+    
+    # Add formula if present
+    if 'formula' in kwargs:
+        params.append(f"formula={kwargs['formula']}")
+    
+    # Add fields if present
+    if 'fields' in kwargs:
+        params.append(f"fields={kwargs['fields']}")
+    
+    # Add sort if present
+    if 'sort' in kwargs:
+        params.append(f"sort={kwargs['sort']}")
+    
+    return ", ".join(params) if params else "no params"
+
 def log_airtable_request(func):
+    """Decorator to log Airtable API requests"""
     @wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
-        calling_function = "Unknown"  # Initialize with default value
         try:
-            # Get the model class name and method name
-            method_name = func.__name__
-            model_class = get_model_class(func, args)
-            calling_function = get_calling_function()
-            
-            # Log the request details before execution
-            logging.info(
-                f"Airtable API Request - Model: {model_class}, Method: {method_name}, "
-                f"Triggered by: {calling_function}, Starting request..."
-            )
-            
             result = func(*args, **kwargs)
-            end_time = time.time()
-            duration = round((end_time - start_time) * 1000, 2)  # Convert to milliseconds
-            
-            # Log the request details after successful execution
-            logging.info(
-                f"Airtable API Request - Model: {model_class}, Method: {method_name}, "
-                f"Triggered by: {calling_function}, Duration: {duration}ms, Status: Success"
-            )
+            duration = time.time() - start_time
+            status = 'success'
             return result
         except Exception as e:
-            end_time = time.time()
-            duration = round((end_time - start_time) * 1000, 2)
-            logging.error(
-                f"Airtable API Request - Model: {model_class}, Method: {method_name}, "
-                f"Triggered by: {calling_function}, Duration: {duration}ms, Status: Error, Error: {str(e)}"
-            )
+            duration = time.time() - start_time
+            status = 'error'
+            error_msg = str(e)
             raise
+        finally:
+            context = getattr(_thread_local, 'context', 'Unknown')
+            model_class = get_model_class(func, args)
+            params = format_request_params(args, kwargs)
+            
+            log_msg = (
+                f"Airtable API Request - Context: {context} - "
+                f"Model: {model_class} - "
+                f"Function: {func.__name__} - "
+                f"Params: {params} - "
+                f"Duration: {duration:.2f}s - "
+                f"Status: {status}"
+            )
+            
+            if status == 'error':
+                log_msg += f" - Error: {error_msg}"
+            
+            logging.info(log_msg)
     return wrapper
 
 # Monkey patch the model class methods to add logging
