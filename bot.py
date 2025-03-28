@@ -44,11 +44,6 @@ topic_input_entity = None
 cleaning_topic_id = None
 medical_topic_id = None
 
-# Cache for curator notifications
-_curator_cache = {}
-_last_curator_check = None
-_CACHE_DURATION = 3600  # Cache duration in seconds (1 hour)
-
 # region Functions
 
 # update volunteers list and schedule
@@ -177,82 +172,36 @@ async def daily_schedule_update():
 @aiocron.crontab('0 * * * *') # every hour at minute 0
 @airtable_context('send_curator_notifications')
 async def send_curator_notifications():
-    global _last_curator_check, _curator_cache
-    
-    current_time = time.time()
-    
-    # Check if we need to refresh the cache
-    if _last_curator_check is None or (current_time - _last_curator_check) > _CACHE_DURATION:
-        # Get all curators and their notification settings in one go
-        volunteers = Volunteer.all(fields=['telegram', 'telegram_chat_id', 'volunteer_roles', 'language'])
-        curators = [volunteer for volunteer in volunteers if 'kk.admin_curator' in volunteer.roles]
-        
-        # Get all notifications for curators in one go
-        curator_ids = [curator.telegram_chat_id for curator in curators]
-        notifications = Notification.all(
-            fields=['admin_curator', 'notify_at', 'date_threshold'],
-            formula=f"OR({{telegram_chat_id}}='{','.join(map(str, curator_ids))}')"
-        )
-        
-        # Create a map of curator_id to notification settings
-        notification_map = {n.telegram_chat_id: n for n in notifications}
-        
-        # Update cache
-        _curator_cache = {
-            curator.telegram_chat_id: {
-                'volunteer': curator,
-                'notification': notification_map.get(curator.telegram_chat_id)
-            }
-            for curator in curators
-        }
-        _last_curator_check = current_time
-    
-    current_hour = datetime.now().strftime('%H:%M')
-    
-    # Check each curator's notification time
-    for curator_id, data in _curator_cache.items():
-        curator = data['volunteer']
-        notification = data['notification']
-        
-        if not notification:
-            # Create default notification settings if none exist
-            notification = Notification(
-                admin_curator=curator.telegram,
-                volunteer=curator,
-                telegram_chat_id=curator.telegram_chat_id,
-                notify_at='12:00',
-                date_threshold='+1'
-            )
-            notification.save()
-            data['notification'] = notification
-        
-        # Check if it's time to send notification
-        if notification.notify_at == current_hour:
-            # Check if there are no volunteers scheduled for any date between today and the threshold date
+    # find all volunteers with roles that contain 'kk.admin_curator'
+    volunteers = Volunteer.all(fields=['telegram', 'telegram_chat_id', 'volunteer_roles', 'language'])
+    curators = [volunteer for volunteer in volunteers if 'kk.admin_curator' in volunteer.roles]
+
+    # If no curators, exit early
+    if not curators:
+        return
+
+    # Fetch all curator notification settings at once
+    curator_ids = [curator.telegram_chat_id for curator in curators]
+    all_curator_settings = Notification.all(formula=match({'telegram_chat_id': ('IN', curator_ids)}))
+
+    curator_settings_map = {setting.telegram_chat_id: setting for setting in all_curator_settings}
+
+    for curator in curators:
+        curator_settings = curator_settings_map[curator.telegram_chat_id]
+        # check if the current time is equal to the time set in the notify_at field
+        if datetime.now().strftime('%H:%M') == curator_settings.notify_at:
+            # check if there are no volunteers scheduled for any date between today and the threshold date
             start_date = datetime.now().date()
-            end_date = start_date + timedelta(days=int(str(notification.date_threshold).split('+')[1]))
-            
-            # Get all schedules for the date range in one go
-            schedules = Schedule.all(
-                fields=['date'],
-                formula=f"AND({{date}}>='{start_date}',{{date}}<='{end_date}')"
-            )
-            scheduled_dates = {schedule.date for schedule in schedules}
-            
-            # Check for gaps in the schedule
+            end_date = start_date + timedelta(days=int(str(curator_settings.date_threshold).split('+')[1]))
             for date in (start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)):
-                if date not in scheduled_dates:
+                if not Schedule.first(formula=match({'date': date})):
                     logging.info(f"No volunteers found for {date} for {curator.telegram}, sending notification.")
                     buttons = [
                         [Button.inline(button_curator_notifications_send[curator.language], data='notifications_send')],
                         [Button.inline(button_curator_ignore[curator.language], data='back')]
                     ]
-                    await bot.send_message(
-                        curator.telegram_chat_id,
-                        notifications_no_volunteers[curator.language].format(format_date_by_language(date, curator.language)),
-                        buttons=buttons
-                    )
-                    break  # Send only one notification for the closest date and break the loop
+                    await bot.send_message(curator.telegram_chat_id, notifications_no_volunteers[curator.language].format(format_date_by_language(date, curator.language)), buttons=buttons)
+                    break  # Send only one notification for the closest date and break the loop, comment this to send notifications for all dates
 
 # function to format the date in the user's language
 def format_date_by_language(date: datetime, language: str):
