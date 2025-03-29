@@ -3,7 +3,7 @@ from telethon import TelegramClient, events, Button, utils
 import logging
 import os, time
 from pyairtable import Api
-from pyairtable.formulas import match
+from pyairtable.formulas import match, OR
 from datetime import datetime, timedelta
 from babel.dates import format_date
 
@@ -182,7 +182,15 @@ async def send_curator_notifications():
 
     # Fetch all curator notification settings at once
     curator_ids = [curator.telegram_chat_id for curator in curators]
-    all_curator_settings = Notification.all(formula=match({'telegram_chat_id': ('IN', curator_ids)}))
+
+    # Build a list of match conditions for each curator ID
+    curator_matches = [match({'telegram_chat_id': curator_id}) for curator_id in curator_ids]
+
+    # Only fetch curator settings if there are curators
+    all_curator_settings = []
+    if curator_matches:
+        # Combine conditions with OR to get all curator settings in one call
+        all_curator_settings = Notification.all(formula=OR(*curator_matches))
 
     curator_settings_map = {setting.telegram_chat_id: setting for setting in all_curator_settings}
 
