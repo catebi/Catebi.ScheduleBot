@@ -126,9 +126,9 @@ async def update_volunteers(step: str):
 # send notifications to volunteers, return the number of sent notifications and the total number of volunteers
 @airtable_context('send_notifications')
 async def send_notifications(curator_id: int):
-    # send notifications to all volunteers with roles kk.cleaning
+    # send notifications to all volunteers with roles kk_cleaning
     volunteers = Volunteer.all(fields=['telegram_chat_id', 'language', 'volunteer_roles'])
-    notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk.cleaning' in volunteer.roles]
+    notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.roles]
     curator = Volunteer.first(formula=match({'telegram_chat_id': curator_id}))
     text = Notification.first(formula=match({'telegram_chat_id': curator_id})).custom_text
     date = datetime.now().date() + timedelta(days=int(str(Notification.first(formula=match({'telegram_chat_id': curator_id})).date_threshold).split('+')[1]))
@@ -142,11 +142,11 @@ async def send_notifications(curator_id: int):
     for volunteer in notifiable_volunteers:
         try:
             role_switch = 'none'
-            if 'kk.medical' in volunteer.roles and 'kk.cleaning' in volunteer.roles:
+            if 'kk_medical' in volunteer.roles and 'kk_cleaning' in volunteer.roles:
                 role_switch = 'both'
-            elif 'kk.medical' in volunteer.roles and 'kk.cleaning' not in volunteer.roles:
+            elif 'kk_medical' in volunteer.roles and 'kk_cleaning' not in volunteer.roles:
                 role_switch = 'medical'
-            elif 'kk.cleaning' in volunteer.roles and 'kk.medical' not in volunteer.roles:
+            elif 'kk_cleaning' in volunteer.roles and 'kk_medical' not in volunteer.roles:
                 role_switch = 'cleaning'
 
             buttons = [
@@ -172,9 +172,9 @@ async def daily_schedule_update():
 @aiocron.crontab('0 * * * *') # every hour at minute 0
 @airtable_context('send_curator_notifications')
 async def send_curator_notifications():
-    # find all volunteers with roles that contain 'kk.admin_curator'
+    # find all volunteers with roles that contain 'kk_admin_curator'
     volunteers = Volunteer.all(fields=['telegram', 'telegram_chat_id', 'volunteer_roles', 'language'])
-    curators = [volunteer for volunteer in volunteers if 'kk.admin_curator' in volunteer.roles]
+    curators = [volunteer for volunteer in volunteers if 'kk_admin_curator' in volunteer.roles]
 
     # If no curators, exit early
     if not curators:
@@ -307,7 +307,7 @@ async def set_topic_handler(event):
         await event.respond(error_not_registered[user.language])
         return
 
-    if 'kk.admin_curator' not in user.roles:
+    if 'kk_admin_curator' not in user.roles:
         await event.respond(error_not_admin[user.language])
         return
 
@@ -340,14 +340,14 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
 
     language = user.language if user else 'en'
     role_switch = 'none'
-    if 'kk.medical' in user.roles and 'kk.cleaning' in user.roles:
+    if 'kk_medical' in user.roles and 'kk_cleaning' in user.roles:
         role_switch = 'both'
-    elif 'kk.medical' in user.roles and 'kk.cleaning' not in user.roles:
+    elif 'kk_medical' in user.roles and 'kk_cleaning' not in user.roles:
         role_switch = 'medical'
-    elif 'kk.cleaning' in user.roles and 'kk.medical' not in user.roles:
+    elif 'kk_cleaning' in user.roles and 'kk_medical' not in user.roles:
         role_switch = 'cleaning'
 
-    admin_flag = True if 'kk.admin_curator' in user.roles else False
+    admin_flag = True if 'kk_admin_curator' in user.roles else False
 
     buttons = [
         [Button.inline(button_new_schedule[language], data=f'new_schedule:{role_switch}')],
