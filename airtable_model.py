@@ -15,7 +15,7 @@ class Volunteer(Model):
 
 class Schedule(Model):
     telegram = fields.TextField('telegram')
-    date = fields.DateField('date')
+    date = fields.DatetimeField('date')
     telegram_chat_id = fields.NumberField('telegram_chat_id')
     volunteer = fields.SingleLinkField('volunteer', Volunteer)
     type = fields.SelectField('type')
@@ -43,6 +43,7 @@ class Notification(Model):
 class Settings(Model):
     key = fields.TextField('key')
     value = fields.NumberField('value')
+    test_value = fields.NumberField('test_value')
 
     class Meta:
         memorize = True
