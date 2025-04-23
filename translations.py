@@ -70,12 +70,17 @@ new_schedule_prompt_medical = {
     'ru': "Выберите дату для смены **🏥 Медуход**, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже назначена медицинская смена."
 } 
 
-add_schedule_success = {
-    'en': "Yay! You have successfully signed up for: **{}** on **{}**!",
-    'ru': "Ура! Вы записаны: **{}** на **{}**!"
+set_schedule_time_prompt = {
+    'en': "Please choose the time you want to sign up on **{}**",
+    'ru': "Пожалуйста, выберите время, на которое хотите записаться на **{}**"
 }
 
-add_schedule_topic_message = "{} {} записалась/ся на дежурство по {} на **{}** 🎉"
+add_schedule_success = {
+    'en': "Yay! You have successfully signed up for: **{}** on **{}** on **{}**!",
+    'ru': "Ура! Вы записаны: **{}** на **{}** в **{}**!"
+}
+
+add_schedule_topic_message = "{} {} записалась/ся на дежурство по {} на **{}** в **{}** 🎉"
 
 delete_schedule_prompt = {
     'en': "Choose a date you want to delete.",
@@ -83,11 +88,11 @@ delete_schedule_prompt = {
 }
 
 delete_schedule_success = {
-    'en': "You have successfully deleted your **{}** registration for **{}**.",
-    'ru': "Вы успешно удалили свою запись **{}** на **{}**."
+    'en': "You have successfully deleted your **{}** registration for **{}** on **{}**.",
+    'ru': "Вы успешно удалили свою запись **{}** на **{}** в **{}**."
 }
 
-delete_schedule_topic_message = "⛔{} {} удалил/а свою запись на дежурство по {} на **{}** 😢"
+delete_schedule_topic_message = "⛔{} {} удалил/а свою запись на дежурство по {} на **{}** в **{}** 😢"
 
 my_schedule_prompt = {
     'en': "📅Your schedule.\nClick on a date to delete registration.",
@@ -95,8 +100,8 @@ my_schedule_prompt = {
 }
 
 my_schedule_delete_prompt = {
-    'en': "Do you want to delete your **{}** registration for **{}**?",
-    'ru': "Вы хотите удалить свою запись **{}** на **{}**?"
+    'en': "Do you want to delete your **{}** registration for **{}** on **{}**?",
+    'ru': "Вы хотите удалить свою запись **{}** на **{}** в **{}**?"
 }
 
 general_schedule = {

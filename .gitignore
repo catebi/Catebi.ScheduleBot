@@ -4,3 +4,4 @@ __pycache__
 .env_temp
 .env
 .DS_Store
+airtable.log
