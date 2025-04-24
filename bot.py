@@ -223,8 +223,9 @@ async def send_curator_notifications():
         # check if the current time is equal to the time set in the notify_at field
         if datetime.now().strftime('%H:%M') == curator_settings.notify_at:
             # check if there are no volunteers scheduled for any date between today and the threshold date
-            start_date = datetime.now().date()
+            start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.now().astimezone().tzinfo)
             end_date = start_date + timedelta(days=int(str(curator_settings.date_threshold).split('+')[1]))
+            end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
             for date in (start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)):
                 if not Schedule.first(formula=match({'date': date})):
                     logging.info(f"No volunteers found for {date} for {curator.telegram}, sending notification.")
@@ -657,7 +658,7 @@ async def callback_handler(event):
         buttons.append([Button.inline(button_back[language], data='notifications')])
         await event.edit(notifications_settings_date_threshold_prompt[language], buttons=buttons)
 
-    if data.startswith('notifications_settings_date_threshold'):
+    if data.startswith('notifications_settings_date_threshold;'):
         _, day = data.split(';')
         admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
         admin.date_threshold = day
