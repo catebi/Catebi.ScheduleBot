@@ -401,7 +401,7 @@ async def callback_handler(event):
 
     # Change user's language
     if data.startswith('language'):
-        _, lang = data.split(';')
+        _, lang = data.split(':')
         # save user's language to Airtable
         await start_handler(event, check_user=True, language=lang)
         return
@@ -642,8 +642,9 @@ async def callback_handler(event):
         buttons.append([Button.inline(button_back[language], data='notifications')])
         await event.edit(notifications_settings_notify_at_prompt[language], buttons=buttons)
 
-    if data.startswith('notifications_settings_notify_at'):
-        _, hour, minute = data.split(';')
+    if data.startswith('notifications_settings_notify_at;'):
+        _, time_str = data.split(';')
+        hour, minute = time_str.split(':')
         admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
         admin.notify_at = f"{hour}:{minute}"
         admin.save()
