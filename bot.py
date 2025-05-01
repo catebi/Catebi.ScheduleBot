@@ -1,4 +1,4 @@
-from telethon import TelegramClient, events, Button, utils
+from telethon import TelegramClient, events, Button, utils, functions, types
 
 import logging
 import os, time
@@ -347,7 +347,7 @@ async def help_handler(event):
 
     await event.respond(f"{help_message[language]}\n\n{version_info}")
 
-@bot.on(events.NewMessage(pattern='/settings'))
+@bot.on(events.NewMessage(pattern='/settings', func=lambda e: e.is_private)) # Only in private chat
 @logger
 async def settings_handler(event):
     # show language selection menu
@@ -384,12 +384,20 @@ async def set_topic_handler(event):
 @logger
 @airtable_context('schedule_handler')
 async def schedule_handler(event, language: str = 'en', update: bool = False):
-    global today_volunteers_list
+    global today_volunteers_list, dates_list
     # check if user exists in Airtable
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
     if not user:
         # show warning that the user is not an existing volunteer
         await event.respond(error_not_registered[language])
+        return
+
+    # if not in private chat just send general schedule
+    if not event.is_private:
+        await event.reply(general_schedule[language].format( # reply, to handle topics correctly
+            ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
+            '\n'.join(dates_list)
+        ))
         return
 
     language = user.language if user else 'en'
