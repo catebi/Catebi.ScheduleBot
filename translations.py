@@ -135,13 +135,23 @@ localized_dates = {
 }
 
 notifications_menu = {
-    'en': "🔔 Notifications menu.\n\nYour current settings are:\n__Notification text:__\n{}\n\n__Notify at: **{}**__\n__Checking date range: **{}** (between today and **{}**)__",
-    'ru': "🔔 Меню уведомлений.\n\nВаши текущие настройки:\n__Текст уведомления:__\n{}\n\n__Время оповещения: **{}**__\n__Промежуток проверяемых дней: **{}** (между сегодня и **{}**)__"
+    'en': "🔔 Notifications menu.\n\nYour current settings are:\n__Cleaning notification text:__\n{}\n\n__Medical notification text:__\n{}\n\n__Notify at: **{}**__\n__Checking date range: **{}** (between today and **{}**)__",
+    'ru': "🔔 Меню уведомлений.\n\nВаши текущие настройки:\n__Текст уведомления о уборке:__\n{}\n\n__Текст уведомления о медицинских сменах:__\n{}\n\n__Время оповещения: **{}**__\n__Промежуток проверяемых дней: **{}** (между сегодня и **{}**)__"
 }
 
 default_notification_text = {
-    'en': "There's no volunteer assigned for **{}**. If you have 1.5 hours, please sign up for a light cleaning. You need to clean the litter boxes, refresh the water, and add food, that's all!",
-    'ru': "На дату **{}** нет дежурного. Если у тебя есть 1.5 часа, пожалуйста, запишись на лайт вариант уборки. Нужно почистить лотки, обновить воду и досыпать корм, всё!"
+    'en': "There's no volunteers assigned for **{}**! Please sign up for a shift if you can 😿",
+    'ru': "На дату **{}** совсем нет дежурных! Пожалуйста, запишитесь на смену, если можете 😿"
+}
+
+default_cleaning_notification_text = {
+    'en': "There's no cleaning volunteer assigned for **{}**. If you have 1.5 hours, please sign up for a light cleaning. You need to clean the litter boxes, refresh the water, and add food, that's all!",
+    'ru': "На дату **{}** нет дежурного по уборке. Если у тебя есть 1.5 часа, пожалуйста, запишись на лайт вариант уборки. Нужно почистить лотки, обновить воду и досыпать корм, всё!"
+}
+
+default_medical_notification_text = {
+    'en': "There's no medical volunteer assigned for **{}**. Please sign up for a medical shift if you can 😸",
+    'ru': "На дату **{}** нет дежурного по медуходу. Пожалуйста, запишитесь на смену, если можете 😸"
 }
 
 notifications_settings_text_prompt = {
@@ -179,9 +189,19 @@ notifications_send_success = {
     'ru': "Уведомление успешно отправлено!\n\nОтправлено **{}** волонтерам из **{}**."
 }
 
-notifications_no_volunteers = {
+notifications_no_volunteers_at_all = {
     'en': "There are no volunteers registered for **{}**!",
     'ru': "На дату **{}** нет зарегистрированных волонтеров!"
+}
+
+notifications_no_cleaning_volunteers = {
+    'en': "There are no cleaning volunteers registered for **{}**!",
+    'ru': "На дату **{}** нет зарегистрированных волонтеров по уборке!"
+}
+
+notifications_no_medical_volunteers = {
+    'en': "There are no medical volunteers registered for **{}**!",
+    'ru': "На дату **{}** нет зарегистрированных волонтеров по медуходу!"
 }
 
 # region Buttons
@@ -226,9 +246,14 @@ button_yes = {
     'ru': "✅ Да"
 }
 
-button_notifications_settings_text = {
-    'en': "📝 Set custom text",
-    'ru': "📝 Установить свой текст" 
+button_notifications_settings_cleaning_text = {
+    'en': "📝 Set custom text for cleaning",
+    'ru': "📝 Установить свой текст для уборки" 
+}
+
+button_notifications_settings_medical_text = {
+    'en': "📝 Set custom text for medical",
+    'ru': "📝 Установить свой текст для медухода"
 }
 
 button_notifications_text_reset = {
@@ -251,9 +276,19 @@ button_notifications_send = {
     'ru': "📤 Отправить сейчас"
 } 
 
-button_curator_notifications_send = {
+button_curator_notifications_send_all = {
     'en': "📤 Notify all volunteers",
     'ru': "📤 Уведомить всех"
+}
+
+button_curator_notifications_send_cleaning = {
+    'en': "📤 Notify cleaning volunteers",
+    'ru': "📤 Уведомить волонтеров по уборке"
+}
+
+button_curator_notifications_send_medical = {
+    'en': "📤 Notify medical volunteers",
+    'ru': "📤 Уведомить волонтеров по медуходу",
 }
 
 button_curator_ignore = {
