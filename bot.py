@@ -560,8 +560,10 @@ async def callback_handler(event):
     if data == 'my_schedule':
         # get a list of scheduled dates
         scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
+        for date in scheduled_dates:
+            date.date = date.date.astimezone(datetime.now().astimezone().tzinfo)
         buttons = [
-            [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]} {(date.date + timedelta(hours=4)).strftime('%H:%M')}",
+            [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]} {(date.date).strftime('%H:%M')}",
                            data=f'my_schedule_delete;{date.date.strftime('%Y-%m-%d %H:%M')};{date.type}')] for date in scheduled_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
@@ -570,7 +572,7 @@ async def callback_handler(event):
     # Ask to confirm the deletion of a scheduled date
     if data.startswith('my_schedule_delete'):
         _, _date, type = data.split(';')
-        date = datetime.strptime(_date, '%Y-%m-%d %H:%M') + timedelta(hours=4) # add 4 hours to the date to match the timezone
+        date = datetime.strptime(_date, '%Y-%m-%d %H:%M')
         logging.info(f"Deleting schedule: {date}, {type}")
         buttons = [
             [Button.inline(button_yes[language], data=f'delete_schedule;{date};{type}')],
