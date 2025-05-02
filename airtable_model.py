@@ -31,7 +31,8 @@ class Notification(Model):
     volunteer = fields.SingleLinkField('volunteer', Volunteer)
     telegram_chat_id = fields.NumberField('telegram_chat_id')
     notify_at = fields.TextField('notify_at')
-    custom_text = fields.TextField('custom_text')
+    custom_text_cleaning = fields.TextField('custom_text_cleaning')
+    custom_text_medical = fields.TextField('custom_text_medical')
     date_threshold = fields.TextField('date_threshold')
 
     class Meta:
