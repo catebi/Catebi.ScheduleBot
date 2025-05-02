@@ -418,7 +418,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
     ]
 
     if admin_flag:
-        buttons.append([Button.inline(button_notifications[language], data='notifications')])
+        buttons.append([Button.inline(button_notifications[language], data='notifications;;')])
 
     if update:
         await event.edit(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
@@ -469,11 +469,15 @@ async def callback_handler(event):
             available_dates[date]['cleaning'] = 0
             available_dates[date]['medical'] = 0
 
+        logging.info(f"Available dates: {available_dates}")
+
         # check if the date is already scheduled by two volunteers, remove it from the list
-        scheduled_dates = Schedule.all(fields=['date', 'type'])
-        for date in scheduled_dates:
-            if date.date.date() in available_dates:
-                available_dates[date.date.date()][date.type] += 1
+        scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'date': ('>=', datetime.now().date())}), sort=['date'])
+        for entry in scheduled_dates:
+            entry.date = entry.date.astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
+            logging.info(f"Scheduled date: {entry.date.date()}, type: {entry.type}")
+            if entry.date.date() in available_dates:
+                available_dates[entry.date.date()][entry.type] += 1
 
         for date in available_dates.copy(): # copy the list to avoid RuntimeError
             if (available_dates[date][type] == 2 and type == 'cleaning') or (available_dates[date][type] == 1 and type == 'medical'):
@@ -482,6 +486,7 @@ async def callback_handler(event):
         # check if the date is already scheduled by the user, remove it from the list
         user_scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id}))
         for date in user_scheduled_dates:
+            date.date = date.date.astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
             if date.date.date() in available_dates and date.type == type:
                 available_dates.pop(date.date.date())
 
@@ -497,18 +502,28 @@ async def callback_handler(event):
     if data.startswith('set_schedule_time'):
         _, date, type = data.split(';')
         date = datetime.strptime(date, '%Y-%m-%d').date()
-        # show a list of available times with 4 items in each row
-        buttons = [
-            [Button.inline(f"{i:02d}:00", data=f'add_schedule;{date};{i:02d}:00;{type}') for i in range(j, j + 4)]
-            for j in range(0, 24, 4)
-        ]
+        # Get current time
+        current_time = datetime.now()
+
+        # Determine the starting hour (next hour if today, 0 otherwise)
+        start_hour = current_time.hour + 1 if date == current_time.date() else 0
+
+        # Create buttons for available hours
+        buttons = []
+        for j in range(0, 24, 4):
+            row = []
+            for i in range(j, min(j + 4, 24)):
+                if i >= start_hour:
+                    row.append(Button.inline(f"{i:02d}:00", data=f'add_schedule;{date};{i:02d}:00;{type}'))
+            if row:  # Only add non-empty rows
+                buttons.append(row)
         buttons.append([Button.inline(button_back[language], data='back')])
         await event.edit(set_schedule_time_prompt[language].format(format_date_by_language(date, language)), buttons=buttons)
 
     # Write a new scheduled date to Airtable
     if data.startswith('add_schedule'):
         _, date, time, type = data.split(';')
-        date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M')
+        date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # add a new record to the Schedule table
         Schedule(
             telegram_chat_id=event.sender.id,
@@ -545,8 +560,10 @@ async def callback_handler(event):
     if data == 'my_schedule':
         # get a list of scheduled dates
         scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
+        for date in scheduled_dates:
+            date.date = date.date.astimezone(datetime.now().astimezone().tzinfo)
         buttons = [
-            [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]} {(date.date + timedelta(hours=4)).strftime('%H:%M')}",
+            [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]} {(date.date).strftime('%H:%M')}",
                            data=f'my_schedule_delete;{date.date.strftime('%Y-%m-%d %H:%M')};{date.type}')] for date in scheduled_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
@@ -555,7 +572,7 @@ async def callback_handler(event):
     # Ask to confirm the deletion of a scheduled date
     if data.startswith('my_schedule_delete'):
         _, _date, type = data.split(';')
-        date = datetime.strptime(_date, '%Y-%m-%d %H:%M') + timedelta(hours=4) # add 4 hours to the date to match the timezone
+        date = datetime.strptime(_date, '%Y-%m-%d %H:%M')
         logging.info(f"Deleting schedule: {date}, {type}")
         buttons = [
             [Button.inline(button_yes[language], data=f'delete_schedule;{date};{type}')],
@@ -585,7 +602,7 @@ async def callback_handler(event):
             delete_schedule_success[language].format(
                 button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
                 format_date_by_language(date, language),
-                (date + timedelta(hours=4)).strftime('%H:%M')
+                date.strftime('%H:%M')
             ),
             buttons=[Button.inline(button_back[language], data='back')]
         )
@@ -623,13 +640,18 @@ async def callback_handler(event):
     #--------------------------------------------------------------------------
     # Admin menu
     #--------------------------------------------------------------------------
-    if data == 'notifications' or data == 'notifications:unset' or data == 'notifications:reset':
-        if 'unset' in data:
+    if data.startswith('notifications;;') or data.startswith('notifications;unset;') or data.startswith('notifications;reset;'):
+        _, action, type = data.split(';')
+        logging.info(f"Notifications settings: {action}, {type}")
+        if action == 'unset':
             custom_text_setting.pop(event.sender.id)
 
-        if 'reset' in data:
+        if action == 'reset':
             admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
-            admin.custom_text = ''
+            if type == 'cleaning':
+                admin.custom_text_cleaning = ''
+            elif type == 'medical':
+                admin.custom_text_medical = ''
             admin.save()
 
         # show current notifications settings
@@ -670,7 +692,7 @@ async def callback_handler(event):
         custom_text_setting[event.sender.id]['type'] = type
         custom_text_setting[event.sender.id]['prompt'] = await event.edit(
             notifications_settings_text_prompt[language],
-            buttons=[Button.inline(button_back[language], data='notifications;unset'), Button.inline(button_notifications_text_reset[language], data='notifications;reset')]
+            buttons=[Button.inline(button_back[language], data='notifications;unset;'), Button.inline(button_notifications_text_reset[language], data=f'notifications;reset;{type}')]
         )
 
     if data == 'notifications_settings_notify_at':
