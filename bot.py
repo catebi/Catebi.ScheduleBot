@@ -299,7 +299,7 @@ async def custom_notifications_handler(event):
     prompt = custom_text_setting[event.sender.id]['prompt']
 
     await prompt.edit(prompt.message, buttons=None) # remove buttons from the prompt to avoid multiple clicks
-    await event.respond(notifications_settings_text_success[admin.volunteer.language], buttons=[Button.inline(button_back[admin.volunteer.language], data='notifications')])
+    await event.respond(notifications_settings_text_success[admin.volunteer.language], buttons=[Button.inline(button_back[admin.volunteer.language], data='notifications;;')])
 
     custom_text_setting.pop(event.sender.id)
 
@@ -702,7 +702,7 @@ async def callback_handler(event):
         buttons = [
             [Button.inline(hour, data=f'notifications_settings_notify_at;{hour}') for hour in hours[i:i+4]] for i in range(0, len(hours), 4)
         ]
-        buttons.append([Button.inline(button_back[language], data='notifications')])
+        buttons.append([Button.inline(button_back[language], data='notifications;;')])
         await event.edit(notifications_settings_notify_at_prompt[language], buttons=buttons)
 
     if data.startswith('notifications_settings_notify_at;'):
@@ -711,7 +711,7 @@ async def callback_handler(event):
         admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
         admin.notify_at = f"{hour}:{minute}"
         admin.save()
-        await event.edit(notifications_settings_notify_at_success[language].format(f"{hour}:{minute}"), buttons=[Button.inline(button_back[language], data='notifications')])
+        await event.edit(notifications_settings_notify_at_success[language].format(f"{hour}:{minute}"), buttons=[Button.inline(button_back[language], data='notifications;;')])
 
     if data == 'notifications_settings_date_threshold':
         # prepare a list of available days
@@ -719,7 +719,7 @@ async def callback_handler(event):
         buttons = [
             [Button.inline(day, data=f'notifications_settings_date_threshold;{day}') for day in days]
         ]
-        buttons.append([Button.inline(button_back[language], data='notifications')])
+        buttons.append([Button.inline(button_back[language], data='notifications;;')])
         await event.edit(notifications_settings_date_threshold_prompt[language], buttons=buttons)
 
     if data.startswith('notifications_settings_date_threshold;'):
@@ -732,7 +732,7 @@ async def callback_handler(event):
             'en': 'days' if int(day) > 1 else 'day',
             'ru': 'день' if int(day) == 1 else 'дня' if int(day) < 5 else 'дней'
         }
-        await event.edit(notifications_settings_date_threshold_success[language].format(day, day_variation[language]), buttons=[Button.inline(button_back[language], data='notifications')])
+        await event.edit(notifications_settings_date_threshold_success[language].format(day, day_variation[language]), buttons=[Button.inline(button_back[language], data='notifications;;')])
 
     if data.startswith('notifications_send;'):
         _, type = data.split(';')
