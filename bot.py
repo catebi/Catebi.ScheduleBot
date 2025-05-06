@@ -670,7 +670,7 @@ async def callback_handler(event):
             [Button.inline(button_notifications_settings_medical_text[language], data='notifications_settings_text;medical')],
             [Button.inline(button_notifications_settings_notify_at[language], data='notifications_settings_notify_at')],
             [Button.inline(button_notifications_settings_date_threshold[language], data='notifications_settings_date_threshold')],
-            [Button.inline(button_notifications_send[language], data='notifications_send')],
+            [Button.inline(button_notifications_send[language], data='notifications_send;all')],
             [Button.inline(button_back[language], data='back')]
         ]
         notification_date = datetime.now().date() + timedelta(days=int(str(currect_settings.date_threshold).split('+')[1]))

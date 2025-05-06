@@ -272,8 +272,8 @@ button_notifications_settings_date_threshold = {
 }
 
 button_notifications_send = {
-    'en': "📤 Send now",
-    'ru': "📤 Отправить сейчас"
+    'en': "📤 Send now (to all)",
+    'ru': "📤 Отправить сейчас (всем)"
 } 
 
 button_curator_notifications_send_all = {
