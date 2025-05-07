@@ -464,8 +464,15 @@ async def callback_handler(event):
 
     # New scheduled date
     if data.startswith('new_schedule'):
+        # Check if data has the expected format
+        parts = data.split(';')
+        if len(parts) < 2:
+            logging.error(f"Invalid data: {data}")
+            await event.edit(error_no_roles[language], buttons=[Button.inline(button_back[language], data='back')])
+            return
+            
         # ask for the type of schedule if role_switch is 3 (both roles are assigned)
-        if data.split(';')[1] == 'both':
+        if parts[1] == 'both':
             buttons = [
                 [Button.inline(button_type_cleaning[language], data='new_schedule;cleaning')],
                 [Button.inline(button_type_medical[language], data='new_schedule;medical')],
@@ -473,11 +480,11 @@ async def callback_handler(event):
             ]
             await event.edit(new_schedule_type_prompt[language], buttons=buttons)
             return
-        elif data.split(';')[1] == 'none':
+        elif parts[1] == 'none':
             await event.edit(error_no_roles[language], buttons=[Button.inline(button_back[language], data='back')])
             return
 
-        type = data.split(';')[1]
+        type = parts[1]
         # prepare a list of available dates, from today to 2 weeks in advance
         available_dates = {}
         for i in range(14):
