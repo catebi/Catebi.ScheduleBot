@@ -3,7 +3,7 @@ from telethon import TelegramClient, events, Button, utils, functions, types
 import logging
 import os, time
 from pyairtable import Api
-from pyairtable.formulas import match, OR
+from pyairtable.formulas import match, OR, AND, GTE, LTE, Field
 from datetime import datetime, timedelta
 from babel.dates import format_date
 
@@ -183,7 +183,7 @@ async def send_notifications(curator_id: int, type: str = 'all'):
                 role_switch = 'cleaning'
 
             buttons = [
-                [Button.inline(button_new_schedule[volunteer.language], data=f'new_schedule:{role_switch}')],
+                [Button.inline(button_new_schedule[volunteer.language], data=f'new_schedule;{role_switch}')],
             ]
 
             await bot.send_message(
@@ -239,28 +239,45 @@ async def send_curator_notifications():
             start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.now().astimezone().tzinfo)
             end_date = start_date + timedelta(days=int(str(curator_settings.date_threshold).split('+')[1]))
             end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-            buttons = []
-            text = ''
+            
             for date in (start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)):
                 logging.info(f"Checking for volunteers for {date} for {curator.telegram}")
-                # if no volunteers found at all
-                if not Schedule.first(formula=match({'date': ('>=', date), 'date': ('<=', date.replace(hour=23, minute=59, second=59, microsecond=999999))})):
+                # Get all schedules for the current date in a single query
+                formula = AND(
+                    GTE(Field('date'), date.replace(hour=0, minute=0, second=0, microsecond=0)),
+                    LTE(Field('date'), date.replace(hour=23, minute=59, second=59, microsecond=999999))
+                )
+                schedules = Schedule.all(
+                    formula=formula,
+                    fields=['type']
+                )
+                
+                buttons = []
+                text = ''
+                if not schedules:
+                    # No volunteers found at all
                     logging.info(f"No volunteers found for {date} for {curator.telegram}, sending notification.")
                     buttons.append([Button.inline(button_curator_notifications_send_all[curator.language], data='notifications_send;all')])
                     text = notifications_no_volunteers_at_all[curator.language].format(format_date_by_language(date, curator.language))
-                elif not Schedule.first(formula=match({'date': ('>=', date), 'date': ('<=', date.replace(hour=23, minute=59, second=59, microsecond=999999)), 'type': 'cleaning'})):
-                    # if no volunteers found for cleaning
-                    logging.info(f"No cleaning volunteers found for {date} for {curator.telegram}, sending notification.")
-                    buttons.append([Button.inline(button_curator_notifications_send_cleaning[curator.language], data='notifications_send;cleaning')])
-                    text = notifications_no_cleaning_volunteers[curator.language].format(format_date_by_language(date, curator.language))
-                elif not Schedule.first(formula=match({'date': ('>=', date), 'date': ('<=', date.replace(hour=23, minute=59, second=59, microsecond=999999)), 'type': 'medical'})):
-                    # if no volunteers found for medical
-                    logging.info(f"No medical volunteers found for {date} for {curator.telegram}, sending notification.")
-                    buttons.append([Button.inline(button_curator_notifications_send_medical[curator.language], data='notifications_send;medical')])
-                    text = notifications_no_medical_volunteers[curator.language].format(format_date_by_language(date, curator.language))
-                buttons.append([Button.inline(button_curator_ignore[curator.language], data='back')])
-                await bot.send_message(curator.telegram_chat_id, text, buttons=buttons)
-                break  # Send only one notification for the closest date and break the loop, comment this to send notifications for all dates
+                else:
+                    # Check if specific types are missing
+                    schedule_types = [s.type for s in schedules]
+                    
+                    if 'cleaning' not in schedule_types:
+                    # No cleaning volunteers found
+                        logging.info(f"No cleaning volunteers found for {date} for {curator.telegram}, sending notification.")
+                        buttons.append([Button.inline(button_curator_notifications_send_cleaning[curator.language], data='notifications_send;cleaning')])
+                        text = notifications_no_cleaning_volunteers[curator.language].format(format_date_by_language(date, curator.language))
+                    elif 'medical' not in schedule_types:
+                    # No medical volunteers found
+                        logging.info(f"No medical volunteers found for {date} for {curator.telegram}, sending notification.")
+                        buttons.append([Button.inline(button_curator_notifications_send_medical[curator.language], data='notifications_send;medical')])
+                        text = notifications_no_medical_volunteers[curator.language].format(format_date_by_language(date, curator.language))
+                
+                if text:
+                    buttons.append([Button.inline(button_curator_ignore[curator.language], data='back')])
+                    await bot.send_message(curator.telegram_chat_id, text, buttons=buttons)
+                    break  # Send only one notification for the closest date and break the loop, delete to notify about all future dates
 
 # function to format the date in the user's language
 def format_date_by_language(date: datetime, language: str):
