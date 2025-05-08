@@ -139,9 +139,9 @@ notifications_menu = {
     'ru': "🔔 Меню уведомлений.\n\nВаши текущие настройки:\n__Текст уведомления о уборке:__\n{}\n\n__Текст уведомления о медицинских сменах:__\n{}\n\n__Время оповещения: **{}**__\n__Промежуток проверяемых дней: **{}** (между сегодня и **{}**)__"
 }
 
-default_notification_text = {
-    'en': "There's no volunteers assigned for **{}**! Please sign up for a shift if you can 😿",
-    'ru': "На дату **{}** совсем нет дежурных! Пожалуйста, запишитесь на смену, если можете 😿"
+notifications_settings_text_menu = {
+    'en': "🔔 Custom text notifications menu.\nPlease choose the notification type you want to customize.",
+    'ru': "🔔 Меню настроек текста уведомлений.\nПожалуйста, выберите тип уведомления, который хотите настроить."
 }
 
 default_cleaning_notification_text = {
@@ -182,6 +182,11 @@ notifications_settings_date_threshold_prompt = {
 notifications_settings_date_threshold_success = {
     'en': "You have successfully set the date threshold to **{}** {}!",
     'ru': "Вы успешно установили остаток дней до дежурства на **{}** {}!"
+}
+
+notifications_send_menu = {
+    'en': "🔔 Notifications send menu.\n\nPlease choose the type of volunteers you want to notify.\n\n__NOTE: If date is set in the notification text, notifications sent from this menu will contain **your threshold** date!__",
+    'ru': "🔔 Меню отправки уведомлений.\n\nПожалуйста, выберите тип волонтеров, которых хотите уведомить.\n\n__ПРИМЕЧАНИЕ: Если в тексте уведомления установлена дата, то уведомление, разосланное из этого меню, будет содержать дату **вашего остатка дней** до дежурства!__"
 }
 
 notifications_send_success = {
@@ -246,6 +251,11 @@ button_yes = {
     'ru': "✅ Да"
 }
 
+button_notifications_settings_text_menu = {
+    'en': "📝 Custom text notifications menu",
+    'ru': "📝 Меню настроек текста уведомлений"
+}
+
 button_notifications_settings_cleaning_text = {
     'en': "📝 Set custom text for cleaning",
     'ru': "📝 Установить свой текст для уборки" 
@@ -271,9 +281,9 @@ button_notifications_settings_date_threshold = {
     'ru': "📅 Установить остаток дней"
 }
 
-button_notifications_send = {
-    'en': "📤 Send now (to all)",
-    'ru': "📤 Отправить сейчас (всем)"
+button_notifications_send_menu = {
+    'en': "📤 Send now menu",
+    'ru': "📤 Меню отправки"
 } 
 
 button_curator_notifications_send_all = {
