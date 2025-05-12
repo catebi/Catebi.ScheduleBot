@@ -295,7 +295,7 @@ def format_date_by_language(date: datetime, language: str):
 
 # handle custom notification text setting
 custom_text_setting = {}
-@bot.on(events.NewMessage())
+@bot.on(events.NewMessage(func=lambda e: e.is_private)) # Only in private chat
 @logger
 async def custom_notifications_handler(event):
     if event.sender.id not in custom_text_setting:
