@@ -295,11 +295,18 @@ def format_date_by_language(date: datetime, language: str):
 
 # handle custom notification text setting
 custom_text_setting = {}
-@bot.on(events.NewMessage(func=lambda e: e.is_private)) # Only in private chat
+@bot.on(events.NewMessage(func=lambda e: e.is_private and e.sender.id in custom_text_setting)) # Only in private chat
 @logger
 async def custom_notifications_handler(event):
     if event.sender.id not in custom_text_setting:
         return
+
+    # prepare local variables
+    admin = None
+    custom_text = None
+    prompt = None
+    pre_curly = None
+    post_curly = None
 
     logging.info(f"Custom text setting: {event.sender.id}, {event.message.message}")
 
