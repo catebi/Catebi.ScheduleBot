@@ -298,9 +298,6 @@ custom_text_setting = {}
 @bot.on(events.NewMessage(func=lambda e: e.is_private and e.sender.id in custom_text_setting)) # Only in private chat
 @logger
 async def custom_notifications_handler(event):
-    if event.sender.id not in custom_text_setting:
-        return
-
     # prepare local variables
     admin = None
     custom_text = None
@@ -679,14 +676,6 @@ async def callback_handler(event):
         if action == 'unset':
             custom_text_setting.pop(event.sender.id)
 
-        if action == 'reset':
-            admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
-            if type == 'cleaning':
-                admin.custom_text_cleaning = ''
-            elif type == 'medical':
-                admin.custom_text_medical = ''
-            admin.save()
-
         # show current notifications settings
         currect_settings = Notification.first(fields=['admin_curator', 'notify_at', 'custom_text_cleaning', 'custom_text_medical', 'date_threshold'], formula=match({'telegram_chat_id': event.sender.id}))
         if not currect_settings:
@@ -697,6 +686,14 @@ async def callback_handler(event):
                 notify_at='12:00',
                 date_threshold='+1')
             currect_settings.save()
+
+        if action == 'reset':
+            if type == 'cleaning':
+                currect_settings.custom_text_cleaning = ''
+            elif type == 'medical':
+                currect_settings.custom_text_medical = ''
+            currect_settings.save()
+            custom_text_setting.pop(event.sender.id)
 
         buttons = [
             [Button.inline(button_notifications_settings_text_menu[language], data=f'notifications_settings_text_menu')],
