@@ -43,6 +43,26 @@ topic_input_entity = None
 cleaning_topic_id = None
 medical_topic_id = None
 
+# Helper function to show loading state with delay
+async def show_loading_state_with_delay(event, user_language: str, delay: float = 2.0):
+    """
+    Show loading state only if operation takes more than the specified delay.
+    Returns a task that can be cancelled if operation completes quickly.
+    """
+
+    # Schedule loading message after delay
+    async def _show_loading_after_delay():
+        try:
+            await asyncio.sleep(delay)
+            await event.edit(loading_text[user_language], buttons=None)
+        except asyncio.CancelledError:
+            # Task was cancelled, operation completed quickly
+            pass
+        except Exception as err:
+            logging.error(f"Error showing delayed loading state: {err}")
+    
+    return asyncio.create_task(_show_loading_after_delay())
+
 # region Functions
 
 # update volunteers list and schedule
@@ -490,43 +510,51 @@ async def callback_handler(event):
             await event.edit(error_no_roles[language], buttons=[Button.inline(button_back[language], data='back')])
             return
 
-        type = data.split(';')[1]
-        # prepare a list of available dates, from today to 2 weeks in advance
-        available_dates = {}
-        for i in range(14):
-            date = datetime.now().date() + timedelta(days=i)
-            available_dates[date] = {}
-            available_dates[date]['cleaning'] = 0
-            available_dates[date]['medical'] = 0
+        # Use delayed loading state for Airtable operations
+        loading_task = await show_loading_state_with_delay(event, language)
+        
+        try:
+            type = data.split(';')[1]
+            # prepare a list of available dates, from today to 2 weeks in advance
+            available_dates = {}
+            for i in range(14):
+                date = datetime.now().date() + timedelta(days=i)
+                available_dates[date] = {}
+                available_dates[date]['cleaning'] = 0
+                available_dates[date]['medical'] = 0
 
-        logging.info(f"Available dates: {available_dates}")
+            logging.info(f"Available dates: {available_dates}")
 
-        # check if the date is already scheduled by two volunteers, remove it from the list
-        scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'date': ('>=', datetime.now().date())}), sort=['date'])
-        for entry in scheduled_dates:
-            entry.date = entry.date.astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
-            logging.info(f"Scheduled date: {entry.date.date()}, type: {entry.type}")
-            if entry.date.date() in available_dates:
-                available_dates[entry.date.date()][entry.type] += 1
+            # check if the date is already scheduled by two volunteers, remove it from the list
+            scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'date': ('>=', datetime.now().date())}), sort=['date'])
+            for entry in scheduled_dates:
+                entry.date = entry.date.astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
+                logging.info(f"Scheduled date: {entry.date.date()}, type: {entry.type}")
+                if entry.date.date() in available_dates:
+                    available_dates[entry.date.date()][entry.type] += 1
 
-        for date in available_dates.copy(): # copy the list to avoid RuntimeError
-            if (available_dates[date][type] == 2 and type == 'cleaning') or (available_dates[date][type] == 1 and type == 'medical'):
-                available_dates.pop(date)
+            for date in available_dates.copy(): # copy the list to avoid RuntimeError
+                if (available_dates[date][type] == 2 and type == 'cleaning') or (available_dates[date][type] == 1 and type == 'medical'):
+                    available_dates.pop(date)
 
-        # check if the date is already scheduled by the user, remove it from the list
-        user_scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id}))
-        for date in user_scheduled_dates:
-            date.date = date.date.astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
-            if date.date.date() in available_dates and date.type == type:
-                available_dates.pop(date.date.date())
+            # check if the date is already scheduled by the user, remove it from the list
+            user_scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id}))
+            for date in user_scheduled_dates:
+                date.date = date.date.astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
+                if date.date.date() in available_dates and date.type == type:
+                    available_dates.pop(date.date.date())
 
-        # show a list of available dates
-        buttons = [
-            [Button.inline(f"{format_date_by_language(date, language)} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}",
-                           data=f'set_schedule_time;{date};{type}')] for date in available_dates
-        ]
-        buttons.append([Button.inline(button_back[language], data='back')])
-        await event.edit(new_schedule_prompt_cleaning[language] if type == 'cleaning' else new_schedule_prompt_medical[language], buttons=buttons)
+            # show a list of available dates
+            buttons = [
+                [Button.inline(f"{format_date_by_language(date, language)} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}",
+                               data=f'set_schedule_time;{date};{type}')] for date in available_dates
+            ]
+            buttons.append([Button.inline(button_back[language], data='back')])
+            await event.edit(new_schedule_prompt_cleaning[language] if type == 'cleaning' else new_schedule_prompt_medical[language], buttons=buttons)
+        finally:
+            # Cancel loading task if operation completed
+            if loading_task and not loading_task.done():
+                loading_task.cancel()
 
     # Ask for the time of the scheduled date
     if data.startswith('set_schedule_time'):
@@ -552,25 +580,33 @@ async def callback_handler(event):
 
     # Write a new scheduled date to Airtable
     if data.startswith('add_schedule'):
-        _, date, time, type = data.split(';')
-        date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
-        # add a new record to the Schedule table
-        Schedule(
-            telegram_chat_id=event.sender.id,
-            date=date,
-            telegram='@'+str(event.sender.username).lower(),
-            volunteer=user,
-            type=type
-        ).save()
-        await update_volunteers('add_schedule')
-        await event.edit(
-            add_schedule_success[language].format(
-                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
-                format_date_by_language(date, language),
-                date.strftime('%H:%M')
-            ),
-            buttons=[Button.inline(button_back[language], data='back')]
-        )
+        # Use delayed loading state for Airtable operations
+        loading_task = await show_loading_state_with_delay(event, language)
+        
+        try:
+            _, date, time, type = data.split(';')
+            date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
+            # add a new record to the Schedule table
+            Schedule(
+                telegram_chat_id=event.sender.id,
+                date=date,
+                telegram='@'+str(event.sender.username).lower(),
+                volunteer=user,
+                type=type
+            ).save()
+            await update_volunteers('add_schedule')
+            await event.edit(
+                add_schedule_success[language].format(
+                    button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                    format_date_by_language(date, language),
+                    date.strftime('%H:%M')
+                ),
+                buttons=[Button.inline(button_back[language], data='back')]
+            )
+        finally:
+            # Cancel loading task if operation completed
+            if loading_task and not loading_task.done():
+                loading_task.cancel()
         if not topic_input_entity:
             logging.error("Topic chat ID is not set, please set it in the settings.")
             return
@@ -588,16 +624,24 @@ async def callback_handler(event):
 
     # View my scheduled dates
     if data == 'my_schedule':
-        # get a list of scheduled dates
-        scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
-        for date in scheduled_dates:
-            date.date = date.date.astimezone(datetime.now().astimezone().tzinfo)
-        buttons = [
-            [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]} {(date.date).strftime('%H:%M')}",
-                           data=f'my_schedule_delete;{date.date.strftime('%Y-%m-%d %H:%M')};{date.type}')] for date in scheduled_dates
-        ]
-        buttons.append([Button.inline(button_back[language], data='back')])
-        await event.edit(my_schedule_prompt[language], buttons=buttons)
+        # Use delayed loading state for Airtable operations
+        loading_task = await show_loading_state_with_delay(event, language)
+        
+        try:
+            # get a list of scheduled dates
+            scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
+            for date in scheduled_dates:
+                date.date = date.date.astimezone(datetime.now().astimezone().tzinfo)
+            buttons = [
+                [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]} {(date.date).strftime('%H:%M')}",
+                               data=f'my_schedule_delete;{date.date.strftime('%Y-%m-%d %H:%M')};{date.type}')] for date in scheduled_dates
+            ]
+            buttons.append([Button.inline(button_back[language], data='back')])
+            await event.edit(my_schedule_prompt[language], buttons=buttons)
+        finally:
+            # Cancel loading task if operation completed
+            if loading_task and not loading_task.done():
+                loading_task.cancel()
 
     # Ask to confirm the deletion of a scheduled date
     if data.startswith('my_schedule_delete'):
@@ -619,23 +663,31 @@ async def callback_handler(event):
 
     # Delete a scheduled date from Airtable
     if data.startswith('delete_schedule'):
-        _, _date, type = data.split(';')
-        date = datetime.strptime(_date, '%Y-%m-%d %H:%M:%S').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
-        # delete a record from the Schedule table
-        unwanted_schedule = Schedule.first(formula=match({'telegram_chat_id': event.sender.id, 'date': date, 'type': type}))
-        if unwanted_schedule:
-            unwanted_schedule.delete()
-        else:
-            logging.error(f"Record not found: {event.sender.id}, {date}, {type}; probably already deleted.")
-        await update_volunteers('delete_schedule')
-        await event.edit(
-            delete_schedule_success[language].format(
-                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
-                format_date_by_language(date, language),
-                date.strftime('%H:%M')
-            ),
-            buttons=[Button.inline(button_back[language], data='back')]
-        )
+        # Use delayed loading state for Airtable operations
+        loading_task = await show_loading_state_with_delay(event, language)
+        
+        try:
+            _, _date, type = data.split(';')
+            date = datetime.strptime(_date, '%Y-%m-%d %H:%M:%S').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
+            # delete a record from the Schedule table
+            unwanted_schedule = Schedule.first(formula=match({'telegram_chat_id': event.sender.id, 'date': date, 'type': type}))
+            if unwanted_schedule:
+                unwanted_schedule.delete()
+            else:
+                logging.error(f"Record not found: {event.sender.id}, {date}, {type}; probably already deleted.")
+            await update_volunteers('delete_schedule')
+            await event.edit(
+                delete_schedule_success[language].format(
+                    button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                    format_date_by_language(date, language),
+                    date.strftime('%H:%M')
+                ),
+                buttons=[Button.inline(button_back[language], data='back')]
+            )
+        finally:
+            # Cancel loading task if operation completed
+            if loading_task and not loading_task.done():
+                loading_task.cancel()
         if not topic_input_entity:
             logging.error("Topic chat ID is not set, please set it in the settings.")
             return
@@ -671,48 +723,56 @@ async def callback_handler(event):
     # Admin menu
     #--------------------------------------------------------------------------
     if data.startswith('notifications;;') or data.startswith('notifications;unset;') or data.startswith('notifications;reset;'):
-        _, action, type = data.split(';')
-        logging.info(f"Notifications settings: {action}, {type}")
-        if action == 'unset':
-            custom_text_setting.pop(event.sender.id)
+        # Use delayed loading state for Airtable operations
+        loading_task = await show_loading_state_with_delay(event, language)
+        
+        try:
+            _, action, type = data.split(';')
+            logging.info(f"Notifications settings: {action}, {type}")
+            if action == 'unset':
+                custom_text_setting.pop(event.sender.id)
 
-        # show current notifications settings
-        currect_settings = Notification.first(fields=['admin_curator', 'notify_at', 'custom_text_cleaning', 'custom_text_medical', 'date_threshold'], formula=match({'telegram_chat_id': event.sender.id}))
-        if not currect_settings:
-            currect_settings = Notification(
-                admin_curator=event.sender.username,
-                volunteer=user,
-                telegram_chat_id=event.sender.id,
-                notify_at='12:00',
-                date_threshold='+1')
-            currect_settings.save()
+            # show current notifications settings
+            currect_settings = Notification.first(fields=['admin_curator', 'notify_at', 'custom_text_cleaning', 'custom_text_medical', 'date_threshold'], formula=match({'telegram_chat_id': event.sender.id}))
+            if not currect_settings:
+                currect_settings = Notification(
+                    admin_curator=event.sender.username,
+                    volunteer=user,
+                    telegram_chat_id=event.sender.id,
+                    notify_at='12:00',
+                    date_threshold='+1')
+                currect_settings.save()
 
-        if action == 'reset':
-            if type == 'cleaning':
-                currect_settings.custom_text_cleaning = ''
-            elif type == 'medical':
-                currect_settings.custom_text_medical = ''
-            currect_settings.save()
-            custom_text_setting.pop(event.sender.id)
+            if action == 'reset':
+                if type == 'cleaning':
+                    currect_settings.custom_text_cleaning = ''
+                elif type == 'medical':
+                    currect_settings.custom_text_medical = ''
+                currect_settings.save()
+                custom_text_setting.pop(event.sender.id)
 
-        buttons = [
-            [Button.inline(button_notifications_settings_text_menu[language], data=f'notifications_settings_text_menu')],
-            [Button.inline(button_notifications_settings_notify_at[language], data='notifications_settings_notify_at')],
-            [Button.inline(button_notifications_settings_date_threshold[language], data='notifications_settings_date_threshold')],
-            [Button.inline(button_notifications_send_menu[language], data='notifications_send_menu')],
-            [Button.inline(button_back[language], data='back')]
-        ]
-        notification_date = datetime.now().date() + timedelta(days=int(str(currect_settings.date_threshold).split('+')[1]))
-        await event.edit(
-            notifications_menu[language].format(
-                str(currect_settings.custom_text_cleaning).format(format_date_by_language(notification_date, language)) if currect_settings.custom_text_cleaning != '' else default_cleaning_notification_text[language].format(format_date_by_language(notification_date, language)),
-                str(currect_settings.custom_text_medical).format(format_date_by_language(notification_date, language)) if currect_settings.custom_text_medical != '' else default_medical_notification_text[language].format(format_date_by_language(notification_date, language)),
-                currect_settings.notify_at,
-                currect_settings.date_threshold,
-                format_date_by_language(notification_date, language)
-            ),
-            buttons=buttons
-        )
+            buttons = [
+                [Button.inline(button_notifications_settings_text_menu[language], data=f'notifications_settings_text_menu')],
+                [Button.inline(button_notifications_settings_notify_at[language], data='notifications_settings_notify_at')],
+                [Button.inline(button_notifications_settings_date_threshold[language], data='notifications_settings_date_threshold')],
+                [Button.inline(button_notifications_send_menu[language], data='notifications_send_menu')],
+                [Button.inline(button_back[language], data='back')]
+            ]
+            notification_date = datetime.now().date() + timedelta(days=int(str(currect_settings.date_threshold).split('+')[1]))
+            await event.edit(
+                notifications_menu[language].format(
+                    str(currect_settings.custom_text_cleaning).format(format_date_by_language(notification_date, language)) if currect_settings.custom_text_cleaning != '' else default_cleaning_notification_text[language].format(format_date_by_language(notification_date, language)),
+                    str(currect_settings.custom_text_medical).format(format_date_by_language(notification_date, language)) if currect_settings.custom_text_medical != '' else default_medical_notification_text[language].format(format_date_by_language(notification_date, language)),
+                    currect_settings.notify_at,
+                    currect_settings.date_threshold,
+                    format_date_by_language(notification_date, language)
+                ),
+                buttons=buttons
+            )
+        finally:
+            # Cancel loading task if operation completed
+            if loading_task and not loading_task.done():
+                loading_task.cancel()
 
     if data == 'notifications_settings_text_menu':
         # show prompt to select the type of notification
@@ -744,12 +804,20 @@ async def callback_handler(event):
         await event.edit(notifications_settings_notify_at_prompt[language], buttons=buttons)
 
     if data.startswith('notifications_settings_notify_at;'):
-        _, time_str = data.split(';')
-        hour, minute = time_str.split(':')
-        admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
-        admin.notify_at = f"{hour}:{minute}"
-        admin.save()
-        await event.edit(notifications_settings_notify_at_success[language].format(f"{hour}:{minute}"), buttons=[Button.inline(button_back[language], data='notifications;;')])
+        # Use delayed loading state for Airtable operations
+        loading_task = await show_loading_state_with_delay(event, language)
+        
+        try:
+            _, time_str = data.split(';')
+            hour, minute = time_str.split(':')
+            admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
+            admin.notify_at = f"{hour}:{minute}"
+            admin.save()
+            await event.edit(notifications_settings_notify_at_success[language].format(f"{hour}:{minute}"), buttons=[Button.inline(button_back[language], data='notifications;;')])
+        finally:
+            # Cancel loading task if operation completed
+            if loading_task and not loading_task.done():
+                loading_task.cancel()
 
     if data == 'notifications_settings_date_threshold':
         # prepare a list of available days
@@ -761,16 +829,24 @@ async def callback_handler(event):
         await event.edit(notifications_settings_date_threshold_prompt[language], buttons=buttons)
 
     if data.startswith('notifications_settings_date_threshold;'):
-        _, day = data.split(';')
-        admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
-        admin.date_threshold = day
-        admin.save()
+        # Use delayed loading state for Airtable operations
+        loading_task = await show_loading_state_with_delay(event, language)
+        
+        try:
+            _, day = data.split(';')
+            admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
+            admin.date_threshold = day
+            admin.save()
 
-        day_variation = {
-            'en': 'days' if int(day) > 1 else 'day',
-            'ru': 'день' if int(day) == 1 else 'дня' if int(day) < 5 else 'дней'
-        }
-        await event.edit(notifications_settings_date_threshold_success[language].format(day, day_variation[language]), buttons=[Button.inline(button_back[language], data='notifications;;')])
+            day_variation = {
+                'en': 'days' if int(day) > 1 else 'day',
+                'ru': 'день' if int(day) == 1 else 'дня' if int(day) < 5 else 'дней'
+            }
+            await event.edit(notifications_settings_date_threshold_success[language].format(day, day_variation[language]), buttons=[Button.inline(button_back[language], data='notifications;;')])
+        finally:
+            # Cancel loading task if operation completed
+            if loading_task and not loading_task.done():
+                loading_task.cancel()
 
     if data == 'notifications_send_menu':
         # show prompt to select the type of notification
@@ -783,11 +859,19 @@ async def callback_handler(event):
         await event.edit(notifications_send_menu[language], buttons=buttons)
 
     if data.startswith('notifications_send;'):
-        _, type, date = data.split(';')
-        if date != '':
-            date = datetime.fromtimestamp(float(date))
-        all_volunteers_count, received_notifications_count = await send_notifications(event.sender.id, type, date)
-        await event.edit(notifications_send_success[language].format(received_notifications_count, all_volunteers_count), buttons=[Button.inline(button_back[language], data='back')])
+        # Use delayed loading state for notification sending
+        loading_task = await show_loading_state_with_delay(event, language)
+        
+        try:
+            _, type, date = data.split(';')
+            if date != '':
+                date = datetime.fromtimestamp(float(date))
+            all_volunteers_count, received_notifications_count = await send_notifications(event.sender.id, type, date)
+            await event.edit(notifications_send_success[language].format(received_notifications_count, all_volunteers_count), buttons=[Button.inline(button_back[language], data='back')])
+        finally:
+            # Cancel loading task if operation completed
+            if loading_task and not loading_task.done():
+                loading_task.cancel()
 
     # Get back
     if data == 'back':
