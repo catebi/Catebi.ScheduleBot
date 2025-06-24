@@ -43,25 +43,13 @@ topic_input_entity = None
 cleaning_topic_id = None
 medical_topic_id = None
 
-# Helper function to show loading state with delay
-async def show_loading_state_with_delay(event, user_language: str, delay: float = 2.0):
-    """
-    Show loading state only if operation takes more than the specified delay.
-    Returns a task that can be cancelled if operation completes quickly.
-    """
-
-    # Schedule loading message after delay
-    async def _show_loading_after_delay():
-        try:
-            await asyncio.sleep(delay)
-            await event.edit(loading_text[user_language], buttons=None)
-        except asyncio.CancelledError:
-            # Task was cancelled, operation completed quickly
-            pass
-        except Exception as err:
-            logging.error(f"Error showing delayed loading state: {err}")
-    
-    return asyncio.create_task(_show_loading_after_delay())
+# Helper function to show loading state and prevent multiple button presses
+async def show_loading_state(event, user_language: str):
+    """Show loading message and remove buttons to prevent multiple presses"""
+    try:
+        await event.edit(loading_text[user_language], buttons=None)
+    except Exception as err:
+        logging.error(f"Error showing loading state: {err}")
 
 # region Functions
 
@@ -543,7 +531,7 @@ async def callback_handler(event):
         # show a list of available dates
         buttons = [
             [Button.inline(f"{format_date_by_language(date, language)} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}",
-                            data=f'set_schedule_time;{date};{type}')] for date in available_dates
+                           data=f'set_schedule_time;{date};{type}')] for date in available_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
         await event.edit(new_schedule_prompt_cleaning[language] if type == 'cleaning' else new_schedule_prompt_medical[language], buttons=buttons)
@@ -572,33 +560,28 @@ async def callback_handler(event):
 
     # Write a new scheduled date to Airtable
     if data.startswith('add_schedule'):
-        # Use delayed loading state for Airtable operations
-        loading_task = await show_loading_state_with_delay(event, language)
+        # Show loading state while saving to Airtable
+        await show_loading_state(event, language)
         
-        try:
-            _, date, time, type = data.split(';')
-            date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
-            # add a new record to the Schedule table
-            Schedule(
-                telegram_chat_id=event.sender.id,
-                date=date,
-                telegram='@'+str(event.sender.username).lower(),
-                volunteer=user,
-                type=type
-            ).save()
-            await update_volunteers('add_schedule')
-            await event.edit(
-                add_schedule_success[language].format(
-                    button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
-                    format_date_by_language(date, language),
-                    date.strftime('%H:%M')
-                ),
-                buttons=[Button.inline(button_back[language], data='back')]
-            )
-        finally:
-            # Cancel loading task if operation completed
-            if loading_task and not loading_task.done():
-                loading_task.cancel()
+        _, date, time, type = data.split(';')
+        date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
+        # add a new record to the Schedule table
+        Schedule(
+            telegram_chat_id=event.sender.id,
+            date=date,
+            telegram='@'+str(event.sender.username).lower(),
+            volunteer=user,
+            type=type
+        ).save()
+        await update_volunteers('add_schedule')
+        await event.edit(
+            add_schedule_success[language].format(
+                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                format_date_by_language(date, language),
+                date.strftime('%H:%M')
+            ),
+            buttons=[Button.inline(button_back[language], data='back')]
+        )
         if not topic_input_entity:
             logging.error("Topic chat ID is not set, please set it in the settings.")
             return
@@ -616,24 +599,19 @@ async def callback_handler(event):
 
     # View my scheduled dates
     if data == 'my_schedule':
-        # Use delayed loading state for Airtable operations
-        loading_task = await show_loading_state_with_delay(event, language)
+        # Show loading state while fetching data from Airtable
+        await show_loading_state(event, language)
         
-        try:
-            # get a list of scheduled dates
-            scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
-            for date in scheduled_dates:
-                date.date = date.date.astimezone(datetime.now().astimezone().tzinfo)
-            buttons = [
-                [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]} {(date.date).strftime('%H:%M')}",
-                               data=f'my_schedule_delete;{date.date.strftime('%Y-%m-%d %H:%M')};{date.type}')] for date in scheduled_dates
-            ]
-            buttons.append([Button.inline(button_back[language], data='back')])
-            await event.edit(my_schedule_prompt[language], buttons=buttons)
-        finally:
-            # Cancel loading task if operation completed
-            if loading_task and not loading_task.done():
-                loading_task.cancel()
+        # get a list of scheduled dates
+        scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
+        for date in scheduled_dates:
+            date.date = date.date.astimezone(datetime.now().astimezone().tzinfo)
+        buttons = [
+            [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]} {(date.date).strftime('%H:%M')}",
+                           data=f'my_schedule_delete;{date.date.strftime('%Y-%m-%d %H:%M')};{date.type}')] for date in scheduled_dates
+        ]
+        buttons.append([Button.inline(button_back[language], data='back')])
+        await event.edit(my_schedule_prompt[language], buttons=buttons)
 
     # Ask to confirm the deletion of a scheduled date
     if data.startswith('my_schedule_delete'):
@@ -655,31 +633,26 @@ async def callback_handler(event):
 
     # Delete a scheduled date from Airtable
     if data.startswith('delete_schedule'):
-        # Use delayed loading state for Airtable operations
-        loading_task = await show_loading_state_with_delay(event, language)
+        # Show loading state while deleting from Airtable
+        await show_loading_state(event, language)
         
-        try:
-            _, _date, type = data.split(';')
-            date = datetime.strptime(_date, '%Y-%m-%d %H:%M:%S').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
-            # delete a record from the Schedule table
-            unwanted_schedule = Schedule.first(formula=match({'telegram_chat_id': event.sender.id, 'date': date, 'type': type}))
-            if unwanted_schedule:
-                unwanted_schedule.delete()
-            else:
-                logging.error(f"Record not found: {event.sender.id}, {date}, {type}; probably already deleted.")
-            await update_volunteers('delete_schedule')
-            await event.edit(
-                delete_schedule_success[language].format(
-                    button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
-                    format_date_by_language(date, language),
-                    date.strftime('%H:%M')
-                ),
-                buttons=[Button.inline(button_back[language], data='back')]
-            )
-        finally:
-            # Cancel loading task if operation completed
-            if loading_task and not loading_task.done():
-                loading_task.cancel()
+        _, _date, type = data.split(';')
+        date = datetime.strptime(_date, '%Y-%m-%d %H:%M:%S').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
+        # delete a record from the Schedule table
+        unwanted_schedule = Schedule.first(formula=match({'telegram_chat_id': event.sender.id, 'date': date, 'type': type}))
+        if unwanted_schedule:
+            unwanted_schedule.delete()
+        else:
+            logging.error(f"Record not found: {event.sender.id}, {date}, {type}; probably already deleted.")
+        await update_volunteers('delete_schedule')
+        await event.edit(
+            delete_schedule_success[language].format(
+                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                format_date_by_language(date, language),
+                date.strftime('%H:%M')
+            ),
+            buttons=[Button.inline(button_back[language], data='back')]
+        )
         if not topic_input_entity:
             logging.error("Topic chat ID is not set, please set it in the settings.")
             return
