@@ -43,6 +43,14 @@ topic_input_entity = None
 cleaning_topic_id = None
 medical_topic_id = None
 
+# Helper function to show loading state and prevent multiple button presses
+async def show_loading_state(event, user_language: str):
+    """Show loading message and remove buttons to prevent multiple presses"""
+    try:
+        await event.edit(loading_text[user_language], buttons=None)
+    except Exception as err:
+        logging.error(f"Error showing loading state: {err}")
+
 # region Functions
 
 # update volunteers list and schedule
@@ -490,6 +498,9 @@ async def callback_handler(event):
             await event.edit(error_no_roles[language], buttons=[Button.inline(button_back[language], data='back')])
             return
 
+        # Show loading state while fetching data from Airtable
+        await show_loading_state(event, language)
+
         type = data.split(';')[1]
         # prepare a list of available dates, from today to 2 weeks in advance
         available_dates = {}
@@ -552,6 +563,9 @@ async def callback_handler(event):
 
     # Write a new scheduled date to Airtable
     if data.startswith('add_schedule'):
+        # Show loading state while saving to Airtable
+        await show_loading_state(event, language)
+        
         _, date, time, type = data.split(';')
         date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # add a new record to the Schedule table
@@ -588,6 +602,9 @@ async def callback_handler(event):
 
     # View my scheduled dates
     if data == 'my_schedule':
+        # Show loading state while fetching data from Airtable
+        await show_loading_state(event, language)
+        
         # get a list of scheduled dates
         scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
         for date in scheduled_dates:
@@ -619,6 +636,9 @@ async def callback_handler(event):
 
     # Delete a scheduled date from Airtable
     if data.startswith('delete_schedule'):
+        # Show loading state while deleting from Airtable
+        await show_loading_state(event, language)
+        
         _, _date, type = data.split(';')
         date = datetime.strptime(_date, '%Y-%m-%d %H:%M:%S').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # delete a record from the Schedule table
@@ -671,6 +691,9 @@ async def callback_handler(event):
     # Admin menu
     #--------------------------------------------------------------------------
     if data.startswith('notifications;;') or data.startswith('notifications;unset;') or data.startswith('notifications;reset;'):
+        # Show loading state while accessing Airtable for notifications settings
+        await show_loading_state(event, language)
+        
         _, action, type = data.split(';')
         logging.info(f"Notifications settings: {action}, {type}")
         if action == 'unset':
@@ -744,6 +767,9 @@ async def callback_handler(event):
         await event.edit(notifications_settings_notify_at_prompt[language], buttons=buttons)
 
     if data.startswith('notifications_settings_notify_at;'):
+        # Show loading state while saving notification time to Airtable
+        await show_loading_state(event, language)
+        
         _, time_str = data.split(';')
         hour, minute = time_str.split(':')
         admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
@@ -761,6 +787,9 @@ async def callback_handler(event):
         await event.edit(notifications_settings_date_threshold_prompt[language], buttons=buttons)
 
     if data.startswith('notifications_settings_date_threshold;'):
+        # Show loading state while saving date threshold to Airtable
+        await show_loading_state(event, language)
+        
         _, day = data.split(';')
         admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
         admin.date_threshold = day
@@ -783,6 +812,9 @@ async def callback_handler(event):
         await event.edit(notifications_send_menu[language], buttons=buttons)
 
     if data.startswith('notifications_send;'):
+        # Show loading state while sending notifications
+        await show_loading_state(event, language)
+        
         _, type, date = data.split(';')
         if date != '':
             date = datetime.fromtimestamp(float(date))

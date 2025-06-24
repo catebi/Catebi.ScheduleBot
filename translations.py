@@ -45,6 +45,12 @@ languages = {
     'ru': "🇷🇺 Русский"
 }
 
+# Loading messages
+loading_text = {
+    'en': "⏳ Loading...",
+    'ru': "⏳ Загрузка..."
+}
+
 main_menu_header = {
     'en': "Main menu 😽",
     'ru': "Главное меню 😽"
