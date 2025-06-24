@@ -498,9 +498,6 @@ async def callback_handler(event):
             await event.edit(error_no_roles[language], buttons=[Button.inline(button_back[language], data='back')])
             return
 
-        # Show loading state while fetching data from Airtable
-        await show_loading_state(event, language)
-
         type = data.split(';')[1]
         # prepare a list of available dates, from today to 2 weeks in advance
         available_dates = {}
@@ -690,10 +687,7 @@ async def callback_handler(event):
     #--------------------------------------------------------------------------
     # Admin menu
     #--------------------------------------------------------------------------
-    if data.startswith('notifications;;') or data.startswith('notifications;unset;') or data.startswith('notifications;reset;'):
-        # Show loading state while accessing Airtable for notifications settings
-        await show_loading_state(event, language)
-        
+    if data.startswith('notifications;;') or data.startswith('notifications;unset;') or data.startswith('notifications;reset;'):        
         _, action, type = data.split(';')
         logging.info(f"Notifications settings: {action}, {type}")
         if action == 'unset':
@@ -766,10 +760,7 @@ async def callback_handler(event):
         buttons.append([Button.inline(button_back[language], data='notifications;;')])
         await event.edit(notifications_settings_notify_at_prompt[language], buttons=buttons)
 
-    if data.startswith('notifications_settings_notify_at;'):
-        # Show loading state while saving notification time to Airtable
-        await show_loading_state(event, language)
-        
+    if data.startswith('notifications_settings_notify_at;'):        
         _, time_str = data.split(';')
         hour, minute = time_str.split(':')
         admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
@@ -787,9 +778,6 @@ async def callback_handler(event):
         await event.edit(notifications_settings_date_threshold_prompt[language], buttons=buttons)
 
     if data.startswith('notifications_settings_date_threshold;'):
-        # Show loading state while saving date threshold to Airtable
-        await show_loading_state(event, language)
-        
         _, day = data.split(';')
         admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
         admin.date_threshold = day
@@ -812,9 +800,6 @@ async def callback_handler(event):
         await event.edit(notifications_send_menu[language], buttons=buttons)
 
     if data.startswith('notifications_send;'):
-        # Show loading state while sending notifications
-        await show_loading_state(event, language)
-        
         _, type, date = data.split(';')
         if date != '':
             date = datetime.fromtimestamp(float(date))
