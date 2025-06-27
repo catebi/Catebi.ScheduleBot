@@ -42,6 +42,7 @@ dates_list = None
 topic_input_entity = None
 cleaning_topic_id = None
 medical_topic_id = None
+steril_cat_topic_id = None
 
 # Helper function to show loading state and prevent multiple button presses
 async def show_loading_state(event, user_language: str):
@@ -56,7 +57,7 @@ async def show_loading_state(event, user_language: str):
 # update volunteers list and schedule
 @airtable_context('update_volunteers')
 async def update_volunteers(step: str):
-    global scheduled_dates, today_volunteers_list, dates_list, topic_input_entity, cleaning_topic_id, medical_topic_id
+    global scheduled_dates, today_volunteers_list, dates_list, topic_input_entity, cleaning_topic_id, medical_topic_id, steril_cat_topic_id
     scheduled_dates = Schedule.all(
         fields=['date', 'volunteer', 'telegram', 'type'],
         sort=['date'],
@@ -86,7 +87,7 @@ async def update_volunteers(step: str):
 
     # update messages in topics
     settings = Settings.all()
-    settings_dict = {setting.key: setting.value for setting in settings}
+    settings_dict = {setting.key: setting.test_value for setting in settings}
 
     if not settings_dict.get('topic_chat_id'):
         logging.error(f"<{step}> Topic chat ID is not set, please set it in the settings.")
@@ -95,14 +96,17 @@ async def update_volunteers(step: str):
     topic_chat_id = settings_dict.get('topic_chat_id')
     cleaning_topic_id = settings_dict.get('cleaning_topic_id')
     medical_topic_id = settings_dict.get('medical_topic_id')
+    steril_cat_topic_id = settings_dict.get('steril_cat_topic_id')
     last_pinned_general_message_id = settings_dict.get('last_pinned_general_message_id')
     last_pinned_cleaning_message_id = settings_dict.get('last_pinned_cleaning_message_id')
     last_pinned_medical_message_id = settings_dict.get('last_pinned_medical_message_id')
+    last_pinned_steril_message_id = settings_dict.get('last_pinned_steril_message_id')
 
     messages = [
         (last_pinned_general_message_id, 'last_pinned_general_message_id', None),
         (last_pinned_cleaning_message_id, 'last_pinned_cleaning_message_id', cleaning_topic_id),
-        (last_pinned_medical_message_id, 'last_pinned_medical_message_id', medical_topic_id)
+        (last_pinned_medical_message_id, 'last_pinned_medical_message_id', medical_topic_id),
+        (last_pinned_steril_message_id, 'last_pinned_steril_message_id', steril_cat_topic_id)
     ]
 
     try:
@@ -130,7 +134,7 @@ async def update_volunteers(step: str):
             )
             await bot.pin_message(topic_input_entity, pin_message.id)
             setting = Settings.first(formula=match({'key': setting_key}))
-            setting.value = pin_message.id
+            setting.test_value = pin_message.id
             setting.save()
 
     # update messages in topics
@@ -150,7 +154,7 @@ async def update_volunteers(step: str):
                 logging.info(f"<{step}> Re-pinning message {id} in topic {topic}")
                 await bot.pin_message(topic_input_entity, id)
                 setting = Settings.first(formula=match({'key': setting_key}))
-                setting.value = id
+                setting.test_value = id
                 setting.save()
 
     logging.info(f"<{step}> Messages in topics updated.")
@@ -183,16 +187,18 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
     # iterate over all volunteers and send notifications
     for volunteer in notifiable_volunteers:
         try:
-            role_switch = 'none'
-            if 'kk_medical' in volunteer.roles and 'kk_cleaning' in volunteer.roles:
-                role_switch = 'both'
-            elif 'kk_medical' in volunteer.roles and 'kk_cleaning' not in volunteer.roles:
-                role_switch = 'medical'
-            elif 'kk_cleaning' in volunteer.roles and 'kk_medical' not in volunteer.roles:
-                role_switch = 'cleaning'
+            roles_set = []
+            if 'kk_cleaning' in volunteer.roles:
+                roles_set.append('cln')
+            if 'kk_medical' in volunteer.roles:
+                roles_set.append('med')
+            if 'steril_cat_in_out' in volunteer.roles:
+                roles_set.append('steril')
+
+            roles_set = '+'.join(roles_set)
 
             buttons = [
-                [Button.inline(button_new_schedule[volunteer.language], data=f'new_schedule;{role_switch}')],
+                [Button.inline(button_new_schedule[volunteer.language], data=f'new_schedule;{roles_set}')],
             ]
 
             if type != 'all':
@@ -391,7 +397,7 @@ async def settings_handler(event):
     # show language selection menu
     await start_handler(event, check_user=False)
 
-@bot.on(events.NewMessage(pattern='/set_cleaning_topic|/set_medical_topic'))
+@bot.on(events.NewMessage(pattern='/set_cleaning_topic|/set_medical_topic|/set_steril_cat_topic'))
 @logger
 async def set_topic_handler(event):
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
@@ -404,7 +410,7 @@ async def set_topic_handler(event):
         return
 
     # set topic type
-    topic_type = 'cleaning' if event.pattern_match.group(0) == '/set_cleaning_topic' else 'medical'
+    topic_type = 'cleaning' if event.pattern_match.group(0) == '/set_cleaning_topic' else 'medical' if event.pattern_match.group(0) == '/set_medical_topic' else 'steril_cat'
     settings_topic_chat_id = Settings.first(formula=match({'key': 'topic_chat_id'}))
     if not settings_topic_chat_id.value: # check if topic chat id is set
         settings_topic_chat_id.value = event.chat.id
@@ -439,18 +445,23 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
         return
 
     language = user.language if user else 'en'
-    role_switch = 'none'
-    if 'kk_medical' in user.roles and 'kk_cleaning' in user.roles:
-        role_switch = 'both'
-    elif 'kk_medical' in user.roles and 'kk_cleaning' not in user.roles:
-        role_switch = 'medical'
-    elif 'kk_cleaning' in user.roles and 'kk_medical' not in user.roles:
-        role_switch = 'cleaning'
+    roles_set = []
+    if 'kk_cleaning' in user.roles:
+        roles_set.append('cln')
+    if 'kk_medical' in user.roles:
+        roles_set.append('med')
+    if 'steril_cat_in_out' in user.roles:
+        roles_set.append('steril')
+
+    if not roles_set:
+        roles_set = 'none'
+    else:
+        roles_set = '+'.join(roles_set)
 
     admin_flag = True if 'kk_admin_curator' in user.roles else False
 
     buttons = [
-        [Button.inline(button_new_schedule[language], data=f'new_schedule;{role_switch}')],
+        [Button.inline(button_new_schedule[language], data=f'new_schedule;{roles_set}')],
         [Button.inline(button_my_schedule[language], data=f'my_schedule')],
         [Button.inline(button_general_schedule[language], data=f'general_schedule')]
     ]
@@ -486,17 +497,19 @@ async def callback_handler(event):
     # New scheduled date
     if data.startswith('new_schedule'):
         # ask for the type of schedule if role_switch is 3 (both roles are assigned)
-        if data.split(';')[1] == 'both':
-            buttons = [
-                [Button.inline(button_type_cleaning[language], data='new_schedule;cleaning')],
-                [Button.inline(button_type_medical[language], data='new_schedule;medical')],
-                [Button.inline(button_back[language], data='back')]
-            ]
-            await event.edit(new_schedule_type_prompt[language], buttons=buttons)
-            return
-        elif data.split(';')[1] == 'none':
+        if data.split(';')[1] == 'none':
             await event.edit(error_no_roles[language], buttons=[Button.inline(button_back[language], data='back')])
             return
+        elif len(data.split(';')[1].split('+')) > 1:
+            buttons = []
+            roles = data.split(';')[1].split('+')
+            if 'cln' in roles:
+                buttons.append([Button.inline(button_type_cleaning[language], data='new_schedule;cleaning')])
+            if 'med' in roles:
+                buttons.append([Button.inline(button_type_medical[language], data='new_schedule;medical')])
+            if 'steril' in roles:
+                buttons.append([Button.inline(button_type_steril[language], data='new_schedule;steril')])
+
 
         type = data.split(';')[1]
         # prepare a list of available dates, from today to 2 weeks in advance
