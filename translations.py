@@ -57,8 +57,8 @@ main_menu_header = {
 }
 
 todays_volunteers = {
-    'en': "Today's volunteers: {}",
-    'ru': "Дежурные сегодня: {}"
+    'en': "Today's volunteers, {}: {}",
+    'ru': "Дежурные сегодня, {}: {}"
 }
 
 new_schedule_type_prompt = {
@@ -74,7 +74,7 @@ new_schedule_prompt_cleaning = {
 new_schedule_prompt_medical = {
     'en': "Choose a date you want to sign up for **🏥Medical**\n\nP.S. The date is hidden if there's a medical shift already assigned on that date.",
     'ru': "Выберите дату для смены **🏥 Медуход**, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже назначена медицинская смена."
-} 
+}
 
 set_schedule_time_prompt = {
     'en': "Please choose the time you want to sign up on **{}**",
@@ -86,7 +86,14 @@ add_schedule_success = {
     'ru': "Ура! Вы записаны: **{}** на **{}** в **{}**!"
 }
 
+add_schedule_success_steril_acceptance = {
+    'en': "Yay! You have successfully signed up for: **{}** on **{}**!",
+    'ru': "Ура! Вы записаны: **{}** на **{}**!"
+}
+
 add_schedule_topic_message = "{} {} записалась/ся на дежурство по {} на **{}** в **{}** 🎉"
+
+add_schedule_topic_steril_acceptance_message = "{} {} записалась/ся на приемку кошек на **{}** 🎉"
 
 delete_schedule_prompt = {
     'en': "Choose a date you want to delete.",
@@ -98,7 +105,9 @@ delete_schedule_success = {
     'ru': "Вы успешно удалили свою запись **{}** на **{}** в **{}**."
 }
 
-delete_schedule_topic_message = "⛔{} {} удалил/а свою запись на дежурство по {} на **{}** в **{}** 😢"
+delete_schedule_topic_message = "⛔{} {} удалил/а свою запись на дежурство по {} на **{}** в **{}** 😿"
+
+delete_schedule_topic_steril_acceptance_message = "⛔{} {} удалил/а свою запись на приемку кошек на **{}** 😿"
 
 my_schedule_prompt = {
     'en': "📅Your schedule.\nClick on a date to delete registration.",
@@ -113,7 +122,7 @@ my_schedule_delete_prompt = {
 general_schedule = {
     'en': """📆 CatFlat schedule
 
-Today's volunteers: {}
+Today's volunteers, {}: {}
 
 Other dates:
 {}
@@ -121,7 +130,7 @@ Other dates:
 
     'ru': """📆 Дежурства в кото-квартире
 
-Дежурства сегодня: {}
+Дежурства сегодня, {}: {}
 
 Другие даты:
 {}
@@ -150,6 +159,11 @@ notifications_settings_text_menu = {
     'ru': "🔔 Меню настроек текста уведомлений.\nПожалуйста, выберите тип уведомления, который хотите настроить."
 }
 
+notifications_menu_steril = {
+    'en': "🔔 Accept-release notifications menu.\n\nYour current settings are:\n__Accept-release notification text:__\n{}",
+    'ru': "🔔 Меню уведомлений по приему-выдаче.\n\nВаши текущие настройки:\n__Текст уведомления по приему-выдаче__\n{}"
+}
+
 default_cleaning_notification_text = {
     'en': "There's no cleaning volunteer assigned for **{}**. If you have 1.5 hours, please sign up for a light cleaning. You need to clean the litter boxes, refresh the water, and add food, that's all!",
     'ru': "На дату **{}** нет дежурного по уборке. Если у тебя есть 1.5 часа, пожалуйста, запишись на лайт вариант уборки. Нужно почистить лотки, обновить воду и досыпать корм, всё!"
@@ -172,7 +186,7 @@ notifications_settings_text_success = {
 
 notifications_settings_notify_at_prompt = {
     'en': "Please choose the time you want to receive the notification about shift shortage.",
-    'ru': "Пожалуйста, выберите время, когда вы хотите получать оповещения о недостатке дежурствах."
+    'ru': "Пожалуйста, выберите время, когда вы хотите получать оповещения о недостатке дежурных."
 }
 
 notifications_settings_notify_at_success = {
@@ -215,6 +229,41 @@ notifications_no_medical_volunteers = {
     'ru': "На дату **{}** нет зарегистрированных волонтеров по медуходу!"
 }
 
+notifications_steril_message = {
+    'en': "Volunteers needed for **🔃 Cat acceptance-release** on **{}** and **{}**!\n\n**{}** — 2 volunteers for acceptance\n**{}** — 1 volunteer for release, any time!\n**{}** — 3 volunteers for acceptance of cats from the clinic",
+    'ru': "Нужны дежурные для **🔃 Приемки-выдачи кошек** на **{}** и **{}**!\n\n**{}** — 2 волонтера для приемки\n**{}** — 1 волонтер для выдачи, в любое время!\n**{}** — 3 волонтера для приемки кошек из клиники"
+}
+
+notifications_steril_curator_dates_prompt = {
+    'en': "Please choose the dates for **🔃 Cat acceptance-release**.\n\nYou can choose given dates or choose your own dates.",
+    'ru': "Пожалуйста, выберите даты для **🔃 Приемки-выдачи кошек**.\n\nВы можете выбрать предложенные даты или выбрать свои собственные."
+}
+
+notifications_steril_curator_confirm_prompt = {
+    'en': "Your notification will look like this:\n\n{}\n\nPlease confirm to send, or go back to edit the dates.",
+    'ru': "Ваше уведомление будет выглядеть так:\n\n{}\n\nПожалуйста, подтвердите отправку, или вернитесь назад, чтобы изменить даты."
+}
+
+notifications_steril_curator_start_date_prompt = {
+    'en': "Please choose the start date for **🔃 Cat acceptance-release**.\nThe end date will be **+1** day of the chosen date.",
+    'ru': "Пожалуйста, выберите начальную дату для **🔃 Приемки-выдачи кошек**.\nДата окончания будет **+1** день от выбранной даты."
+}
+
+notifications_steril_volunteer_acceptance_prompt = {
+    'en': "Please choose the date you want to sign up for **⬇️ Cat acceptance**.",
+    'ru': "Пожалуйста, выберите дату, на которую вы хотите записаться для **⬇️ Приемки кошек**."
+}
+
+notifications_steril_volunteer_release_date_prompt = {
+    'en': "Please choose the date you want to sign up for **⬆️ Cat release**.",
+    'ru': "Пожалуйста, выберите дату, на которую вы хотите записаться для **⬆️ Выдачи кошек**."
+}
+
+notifications_steril_volunteer_release_time_prompt = {
+    'en': "Please choose the time you want to sign up for **⬆️ Cat release**.",
+    'ru': "Пожалуйста, выберите время, на которое вы хотите записаться для **⬆️ Выдачи кошек**."
+}
+
 # region Buttons
 
 button_new_schedule = {
@@ -232,6 +281,16 @@ button_type_medical = {
     'ru': "🏥 Медуход"
 }
 
+button_type_steril_acceptance = {
+    'en': "⬇️ Cat acceptance",
+    'ru': "⬇️ Приемка кошек"
+}
+
+button_type_steril_release = {
+    'en': "⬆️ Cat release",
+    'ru': "⬆️ Выдача кошек"
+}
+
 button_my_schedule = {
     'en': "📅 My schedule",
     'ru': "📅 Мое расписание"
@@ -245,6 +304,26 @@ button_general_schedule = {
 button_notifications = {
     'en': "🔔 Notifications",
     'ru': "🔔 Уведомления"
+}
+
+button_notifications_steril = {
+    'en': "🔔 Create new accept-release notification",
+    'ru': "🔔 Создать новое уведомление по приему-выдаче"
+}
+
+button_steril_accept_acceptance = {
+    'en': "⬇️ Sign up for a cat acceptance",
+    'ru': "⬇️ Записаться на приемку кошек"
+}
+
+button_steril_accept_release = {
+    'en': "⬆️ Sign up for a cat release",
+    'ru': "⬆️ Записаться на выдачу кошек"
+}
+
+button_steril_own_dates = {
+    'en': "📅 Choose your own dates",
+    'ru': "📅 Выбрать свои даты"
 }
 
 button_back = {
@@ -287,6 +366,16 @@ button_notifications_settings_date_threshold = {
     'ru': "📅 Установить остаток дней"
 }
 
+button_notifications_settings_steril_datetime = {
+    'en': "📅 Set accept-release date and time",
+    'ru': "📅 Установить дату и время приёма-выдачи"
+}
+
+button_notifications_settings_steril_text = {
+    'en': "📝 Set custom text for accept-release",
+    'ru': "📝 Установить свой текст для приёма-выдачи"
+}
+
 button_notifications_send_menu = {
     'en': "📤 Send now menu",
     'ru': "📤 Меню отправки"
@@ -307,10 +396,17 @@ button_curator_notifications_send_medical = {
     'ru': "📤 Уведомить волонтеров по медуходу",
 }
 
+button_curator_notifications_send_steril = {
+    'en': "📤 Notify accept-release volunteers",
+    'ru': "📤 Уведомить волонтеров по приему-выдаче"
+}
+
 button_curator_ignore = {
     'en': "🚫 Ignore",
     'ru': "🚫 Игнорировать"
 }
+
+
 
 # region Error messages
 error_not_registered = {
