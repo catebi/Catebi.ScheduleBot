@@ -105,7 +105,7 @@ async def update_volunteers(step: str):
 
     # update messages in topics
     settings = Settings.all()
-    settings_dict = {setting.key: setting.test_value for setting in settings}
+    settings_dict = {setting.key: setting.value for setting in settings}
 
     if not settings_dict.get('topic_chat_id'):
         logging.error(f"<{step}> Topic chat ID is not set, please set it in the settings.")
@@ -149,7 +149,7 @@ async def update_volunteers(step: str):
         )
         await bot.pin_message(topic_input_entity, pin_message.id)
         setting = Settings.first(formula=match({'key': setting_key}))
-        setting.test_value = pin_message.id
+        setting.value = pin_message.id
         setting.save()
 
     # update messages in topics
@@ -173,7 +173,7 @@ async def update_volunteers(step: str):
                 logging.info(f"<{step}> Re-pinning message {id} in topic {topic}")
                 await bot.pin_message(topic_input_entity, id)
                 setting = Settings.first(formula=match({'key': setting_key}))
-                setting.test_value = id
+                setting.value = id
                 setting.save()
 
     logging.info(f"<{step}> Messages in topics updated.")
