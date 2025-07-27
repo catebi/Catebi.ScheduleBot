@@ -500,7 +500,8 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
     if 'kk_medical' in user.roles:
         roles_set.append('med')
     if 'steril_cat_in_out' in user.roles:
-        roles_set.append('steril')
+        roles_set.append('steril_acceptance')
+        roles_set.append('steril_release')
 
     if not roles_set:
         roles_set = 'none'
@@ -558,8 +559,9 @@ async def callback_handler(event):
                 buttons.append([Button.inline(button_type_cleaning[language], data='new_schedule;cleaning')])
             if 'med' in roles:
                 buttons.append([Button.inline(button_type_medical[language], data='new_schedule;medical')])
-            if 'steril' in roles:
+            if 'steril_acceptance' in roles:
                 buttons.append([Button.inline(button_type_steril_acceptance[language], data='new_schedule;steril_acceptance')])
+            if 'steril_release' in roles:
                 buttons.append([Button.inline(button_type_steril_release[language], data='new_schedule;steril_release')])
             buttons.append([Button.inline(button_back[language], data='back')])
             await event.edit(new_schedule_type_prompt[language], buttons=buttons)
