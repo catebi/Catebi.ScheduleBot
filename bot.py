@@ -105,7 +105,7 @@ async def update_volunteers(step: str):
 
     # update messages in topics
     settings = Settings.all()
-    settings_dict = {setting.key: setting.value for setting in settings}
+    settings_dict = {setting.key: setting.test_value for setting in settings}
 
     if not settings_dict.get('topic_chat_id'):
         logging.error(f"<{step}> Topic chat ID is not set, please set it in the settings.")
@@ -138,19 +138,19 @@ async def update_volunteers(step: str):
     for message_id, setting_key, topic in messages:
         if not message_id:
             logging.info(f"<{step}> Message ID is not set, creating a new message.")
-        pin_message = await bot.send_message(
-            topic_input_entity,
-            general_schedule['ru'].format(
-                today,
-                ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
-                '\n'.join(dates_list)
-            ),
-            reply_to=topic
-        )
-        await bot.pin_message(topic_input_entity, pin_message.id)
-        setting = Settings.first(formula=match({'key': setting_key}))
-        setting.value = pin_message.id
-        setting.save()
+            pin_message = await bot.send_message(
+                topic_input_entity,
+                general_schedule['ru'].format(
+                    today,
+                    ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
+                    '\n'.join(dates_list)
+                ),
+                reply_to=topic
+            )
+            await bot.pin_message(topic_input_entity, pin_message.id)
+            setting = Settings.first(formula=match({'key': setting_key}))
+            setting.test_value = pin_message.id
+            setting.save()
 
     # update messages in topics
     if step != 'startup':
@@ -173,7 +173,7 @@ async def update_volunteers(step: str):
                 logging.info(f"<{step}> Re-pinning message {id} in topic {topic}")
                 await bot.pin_message(topic_input_entity, id)
                 setting = Settings.first(formula=match({'key': setting_key}))
-                setting.value = id
+                setting.test_value = id
                 setting.save()
 
     logging.info(f"<{step}> Messages in topics updated.")
@@ -556,7 +556,9 @@ async def callback_handler(event):
                 buttons.append([Button.inline(button_type_cleaning[language], data='new_schedule;cleaning')])
             if 'med' in roles:
                 buttons.append([Button.inline(button_type_medical[language], data='new_schedule;medical')])
-
+            buttons.append([Button.inline(button_back[language], data='back')])
+            await event.edit(new_schedule_type_prompt[language], buttons=buttons)
+            return
 
         type = data.split(';')[1]
         if type not in ['cleaning', 'medical']:
