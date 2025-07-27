@@ -1,4 +1,4 @@
-from telethon import TelegramClient, events, Button, utils, functions, types
+from telethon import TelegramClient, events, Button, utils, functions, types, errors
 
 import logging
 import os, time
@@ -80,14 +80,26 @@ async def update_volunteers(step: str):
         date.date = date.date.astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # aggregate volunteers if two are scheduled at the same date
         if date.date.date() == datetime.now().date():
-            today_volunteers_list.append(('🧹'+date.volunteer.telegram if date.type == 'cleaning' else '🏥'+date.volunteer.telegram) + f'({date.date.strftime('%H:%M')})')
+            today_volunteers_list.append(
+                ('🧹'+date.volunteer.telegram if date.type == 'cleaning' 
+                 else '🏥'+date.volunteer.telegram if date.type == 'medical'
+                 else '😸⬆️'+date.volunteer.telegram if date.type == 'steril_release'
+                 else '😸⬇️'+date.volunteer.telegram) + (f' ({date.date.strftime('%H:%M')})') if date.type != 'steril_acceptance' else '')
             continue
         same_date = [d for d in dates_list if d.startswith(date.date.strftime('%d.%m'))]
         if same_date:
             dates_list.remove(same_date[0])
-            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {same_date[0].split(': ')[1]}, {'🧹'+date.volunteer.telegram if date.type == 'cleaning' else '🏥'+date.volunteer.telegram} ({date.date.strftime('%H:%M')})")
+            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {same_date[0].split(': ')[1]}, { \
+                '🧹'+date.volunteer.telegram if date.type == 'cleaning' \
+                else '🏥'+date.volunteer.telegram if date.type == 'medical' \
+                else '😸⬆️'+date.volunteer.telegram if date.type == 'steril_release' \
+                else '😸⬇️'+date.volunteer.telegram}" + (f" ({date.date.strftime('%H:%M')})" if date.type != 'steril_acceptance' else ''))
         else:
-            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {'🧹'+date.volunteer.telegram if date.type == 'cleaning' else '🏥'+date.volunteer.telegram} ({date.date.strftime('%H:%M')})")
+            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: { \
+                '🧹'+date.volunteer.telegram if date.type == 'cleaning' \
+                else '🏥'+date.volunteer.telegram if date.type == 'medical' \
+                else '😸⬆️'+date.volunteer.telegram if date.type == 'steril_release' \
+                else '😸⬇️'+date.volunteer.telegram}" + (f" ({date.date.strftime('%H:%M')})" if date.type != 'steril_acceptance' else ''))
 
     logging.info(f"<{step}> Volunteers list and schedule updated.")
 
@@ -124,34 +136,33 @@ async def update_volunteers(step: str):
         return
 
     for message_id, setting_key, topic in messages:
-        search_message = await bot.get_messages(topic_input_entity, ids=message_id)
-        if not message_id or not search_message:
-            if not message_id:
-                logging.info(f"<{step}> Message ID is not set, creating a new message.")
-            if not search_message:
-                logging.info(f"<{step}> Message not found in topic {topic}, creating a new message.")
-            pin_message = await bot.send_message(
-                topic_input_entity,
-                general_schedule['ru'].format(
-                    today,
-                    ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
-                    '\n'.join(dates_list)
-                ),
-                reply_to=topic
-            )
-            await bot.pin_message(topic_input_entity, pin_message.id)
-            setting = Settings.first(formula=match({'key': setting_key}))
-            setting.test_value = pin_message.id
-            setting.save()
+        if not message_id:
+            logging.info(f"<{step}> Message ID is not set, creating a new message.")
+        pin_message = await bot.send_message(
+            topic_input_entity,
+            general_schedule['ru'].format(
+                today,
+                ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
+                '\n'.join(dates_list)
+            ),
+            reply_to=topic
+        )
+        await bot.pin_message(topic_input_entity, pin_message.id)
+        setting = Settings.first(formula=match({'key': setting_key}))
+        setting.test_value = pin_message.id
+        setting.save()
 
     # update messages in topics
     if step != 'startup':
         for id, setting_key, _ in messages:
-            await bot.edit_message(topic_input_entity, id, general_schedule['ru'].format(
-                today,
-                ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
-                '\n'.join(dates_list)
-            ))
+            try:
+                await bot.edit_message(topic_input_entity, id, general_schedule['ru'].format(
+                    today,
+                    ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
+                    '\n'.join(dates_list)
+                ))
+            except errors.MessageNotModifiedError:
+                logging.info(f"<{step}> Message {id} in topic {topic} is already up to date, skipping edit.")
             await asyncio.sleep(0.5) # avoid flood limits
 
     # re-pin messages in topics if step is 'daily'
@@ -212,8 +223,8 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
 
             if type == 'steril':
                 buttons = [
-                    [Button.inline(button_steril_accept_acceptance[volunteer.language], data=f'steril_acceptance;{date.timestamp()}')],
-                    [Button.inline(button_steril_accept_release[volunteer.language], data=f'steril_release;{date.timestamp()}')],
+                    [Button.inline(button_steril_accept_acceptance[volunteer.language], data=f'new_steril_acceptance;{curator_id};{date.timestamp()}')],
+                    [Button.inline(button_steril_accept_release[volunteer.language], data=f'new_steril_release;{curator_id};{date.timestamp()}')],
                     [Button.inline(button_curator_ignore[volunteer.language], data='back')]
                 ]
             else:
@@ -289,7 +300,11 @@ async def send_curator_notifications():
     curator_settings_map = {setting.telegram_chat_id: setting for setting in all_curator_settings}
 
     for curator in curators:
-        curator_settings = curator_settings_map[curator.telegram_chat_id]
+        try:
+            curator_settings = curator_settings_map[curator.telegram_chat_id]
+        except KeyError:
+            logging.warning(f"No notification settings found for curator {curator.telegram} ({curator.telegram_chat_id}), skipping.")
+            continue
         # check if the current time is equal to the time set in the notify_at field
         if datetime.now().strftime('%H:%M') == curator_settings.notify_at:
             # check if there are no volunteers scheduled for any date between today and the threshold date
@@ -484,8 +499,6 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
         roles_set.append('cln')
     if 'kk_medical' in user.roles:
         roles_set.append('med')
-    if 'steril_cat_in_out' in user.roles:
-        roles_set.append('steril')
 
     if not roles_set:
         roles_set = 'none'
@@ -559,6 +572,8 @@ async def callback_handler(event):
             available_dates[date] = {}
             available_dates[date]['cleaning'] = 0
             available_dates[date]['medical'] = 0
+            available_dates[date]['steril_release'] = 0
+            available_dates[date]['steril_acceptance'] = 0
 
         logging.info(f"Available dates: {available_dates}")
 
@@ -660,8 +675,14 @@ async def callback_handler(event):
         for date in scheduled_dates:
             date.date = date.date.astimezone(datetime.now().astimezone().tzinfo)
         buttons = [
-            [Button.inline(f"{format_date_by_language(date.date, language)}: {button_type_cleaning[language] if date.type == 'cleaning' else button_type_medical[language]} {(date.date).strftime('%H:%M')}",
-                           data=f'my_schedule_delete;{date.date.strftime('%Y-%m-%d %H:%M')};{date.type}')] for date in scheduled_dates
+            [
+                Button.inline(f"{format_date_by_language(date.date, language)}: { \
+                button_type_cleaning[language] if date.type == 'cleaning' \
+                else button_type_medical[language] if date.type == 'medical' \
+                else button_type_steril_release[language] if date.type == 'steril_release' \
+                else button_type_steril_acceptance[language]}" + (f" ({(date.date).strftime('%H:%M')})" if date.type != 'steril_acceptance' else ''),
+                           data=f'my_schedule_delete;{date.date.strftime('%Y-%m-%d %H:%M')};{date.type}')
+            ] for date in scheduled_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
         await event.edit(my_schedule_prompt[language], buttons=buttons)
@@ -677,7 +698,10 @@ async def callback_handler(event):
         ]
         await event.edit(
             my_schedule_delete_prompt[language].format(
-                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                button_type_cleaning[language] if type == 'cleaning'
+                else button_type_medical[language] if type == 'medical'
+                else button_type_steril_release[language] if type == 'steril_release'
+                else button_type_steril_acceptance[language],
                 format_date_by_language(date, language),
                 date.strftime('%H:%M')
             ),
@@ -700,7 +724,10 @@ async def callback_handler(event):
         await update_volunteers('delete_schedule')
         await event.edit(
             delete_schedule_success[language].format(
-                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                button_type_cleaning[language] if type == 'cleaning'
+                else button_type_medical[language] if type == 'medical'
+                else button_type_steril_release[language] if type == 'steril_release'
+                else button_type_steril_acceptance[language],
                 format_date_by_language(date, language),
                 date.strftime('%H:%M')
             ),
@@ -709,16 +736,35 @@ async def callback_handler(event):
         if not topic_input_entity:
             logging.error("Topic chat ID is not set, please set it in the settings.")
             return
+
+        if type == 'steril_acceptance':
+            await bot.send_message(
+                topic_input_entity,
+                delete_schedule_topic_steril_acceptance_message.format(
+                    '😿⬇️',
+                    user.telegram,
+                    'сегодня' if date == datetime.now().date() else 'завтра' if date == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
+                ),
+                reply_to=steril_cat_topic_id
+            )
+            return
+
         await bot.send_message(
             topic_input_entity,
             delete_schedule_topic_message.format(
-                '🏥' if type == 'medical' else '🧹',
+                '🏥' if type == 'medical'
+                else '🧹' if type == 'cleaning'
+                else '😿⬆️',
                 user.telegram,
-                'медуходу' if type == 'medical' else 'уборке',
+                'медуходу' if type == 'medical'
+                else 'уборке' if type == 'cleaning'
+                else 'выдаче кошков',
                 'сегодня' if date == datetime.now().date() else 'завтра' if date == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
                 date.strftime('%H:%M')
             ),
-            reply_to=cleaning_topic_id if type == 'cleaning' else medical_topic_id
+            reply_to=cleaning_topic_id if type == 'cleaning'
+            else medical_topic_id if type == 'medical'
+            else steril_cat_topic_id
         )
 
     # View all scheduled dates
@@ -930,8 +976,7 @@ async def callback_handler(event):
 
     if data.startswith('notifications_steril_confirm;'):
         _, start = data.split(';')
-        start_date = datetime.strptime(start, '%Y-%m-%d').date()
-        end_date = start_date + timedelta(days=1)
+        start_date = datetime.strptime(start, '%Y-%m-%d')
 
         # Show loading state while sending notifications
         await show_loading_state(event, language)
@@ -944,6 +989,107 @@ async def callback_handler(event):
             ), buttons=[
                 [Button.inline(button_back[language], data='back')]
             ]
+        )
+
+    if data.startswith('new_steril_'):
+        type = data.split('_')[2].split(';')[0]  # 'acceptance' or 'release'
+        curator = data.split(';')[1]
+        date = datetime.fromtimestamp(float(data.split(';')[2])).date()
+        # show prompt to choose date
+        buttons = [
+            [Button.inline(format_date_by_language(date, language), data=f'steril_{type};{curator};{date};')],
+            [Button.inline(format_date_by_language(date + timedelta(days=1), language), data=f'steril_{type};{curator};{date + timedelta(days=1)};')]
+        ]
+        await event.edit(
+            notifications_steril_volunteer_acceptance_prompt[language] if type == 'acceptance' else notifications_steril_volunteer_release_date_prompt[language],
+            buttons=buttons
+        )
+
+    if data.startswith('steril_release') and data.split(';')[3] == '':
+        curator = data.split(';')[1]
+        date = datetime.strptime(data.split(';')[2], '%Y-%m-%d').date()
+        # show prompt to choose time
+        buttons = []
+        for i in range(0, 24, 4):
+            row = []
+            for j in range(i, min(i + 4, 24)):
+                row.append(Button.inline(f"{j:02d}:00", data=f'steril_release;{curator};{date};{j:02d}:00'))
+            buttons.append(row)
+        await event.edit(
+            notifications_steril_volunteer_release_time_prompt[language].format(format_date_by_language(date, language)),
+            buttons=buttons
+        )
+        return
+
+    if data.startswith('steril_'):
+        type, curator, date, time = data.split(';')
+        date = datetime.strptime(date, '%Y-%m-%d')
+        if time:
+            time = datetime.strptime(time, '%H:%M').time().replace(second=0, microsecond=0)
+            date = datetime.combine(date, time).astimezone(datetime.now().astimezone().tzinfo)
+
+        await show_loading_state(event, language)  # Show loading state while saving to Airtable
+
+        # add a new record to the Schedule table
+        Schedule(
+            telegram_chat_id=event.sender.id,
+            date=date,
+            telegram='@' + str(event.sender.username).lower(),
+            volunteer=user,
+            type=type
+        ).save()
+
+        await update_volunteers('add_schedule')
+    
+        if type == 'steril_acceptance':
+            await event.edit(
+                add_schedule_success_steril_acceptance[language].format(
+                    button_type_steril_acceptance[language],
+                    format_date_by_language(date, language)
+                ),
+                buttons=[Button.inline(button_back[language], data='back')]
+            )
+        else:
+            await event.edit(
+                add_schedule_success[language].format(
+                    button_type_steril_release[language],
+                    format_date_by_language(date, language),
+                    time
+                ),
+                buttons=[Button.inline(button_back[language], data='back')]
+            )
+
+        if not topic_input_entity:
+            logging.error("Topic chat ID is not set, please set it in the settings.")
+            return
+
+        if type == 'steril_acceptance':
+            await bot.send_message(
+                topic_input_entity,
+                add_schedule_topic_steril_acceptance_message.format(
+                    '⬇️',
+                    user.telegram,
+                    'сегодня' if date.date() == datetime.now().date() else 'завтра' if date.date() == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
+                ),
+                reply_to=steril_cat_topic_id
+            )
+        else:
+            await bot.send_message(
+                topic_input_entity,
+                add_schedule_topic_message.format(
+                    '⬆️',
+                    user.telegram,
+                    'выдаче кошков',
+                    'сегодня' if date.date() == datetime.now().date() else 'завтра' if date.date() == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
+                    time
+                ),
+                reply_to=steril_cat_topic_id
+            )
+
+        # send a message to the curator
+        await bot.send_message(
+            int(curator),
+            f"🔔 Новая запись на {'приёмку' if type == 'steril_acceptance' else 'выдачу'} кошков от {user.telegram} на {format_date_by_language(date, language)}."
         )
 
     # Get back
