@@ -91,6 +91,11 @@ add_schedule_success = {
     'ru': "Ура! Вы записаны: **{}** на **{}** в **{}**!"
 }
 
+add_schedule_success_steril_acceptance = {
+    'en': "Yay! You have successfully signed up for: **{}** on **{}**!",
+    'ru': "Ура! Вы записаны: **{}** на **{}**!"
+}
+
 add_schedule_topic_message = "{} {} записалась/ся на дежурство по {} на **{}** в **{}** 🎉"
 
 delete_schedule_prompt = {
@@ -225,6 +230,41 @@ notifications_no_medical_volunteers = {
     'ru': "На дату **{}** нет зарегистрированных волонтеров по медуходу!"
 }
 
+notifications_steril_message = {
+    'en': "Volunteers needed for **🔃 Cat acceptance-release** on **{}** and **{}**!\n\n**{}** — 2 volunteers for acceptance\n**{}** — 1 volunteer for release, any time!\n**{}** — 3 volunteers for acceptance of cats from the clinic",
+    'ru': "Нужны дежурные для **🔃 Приемки-выдачи кошек** на **{}** и **{}**!\n\n**{}** — 2 волонтера для приемки\n**{}** — 1 волонтер для выдачи, в любое время!\n**{}** — 3 волонтера для приемки кошек из клиники"
+}
+
+notifications_steril_curator_dates_prompt = {
+    'en': "Please choose the dates for **🔃 Cat acceptance-release**.\n\nYou can choose given dates or choose your own dates.",
+    'ru': "Пожалуйста, выберите даты для **🔃 Приемки-выдачи кошек**.\n\nВы можете выбрать предложенные даты или выбрать свои собственные."
+}
+
+notifications_steril_curator_confirm_prompt = {
+    'en': "Your notification will look like this:\n\n{}\n\nPlease confirm to send, or go back to edit the dates.",
+    'ru': "Ваше уведомление будет выглядеть так:\n\n{}\n\nПожалуйста, подтвердите отправку, или вернитесь назад, чтобы изменить даты."
+}
+
+notifications_steril_curator_start_date_prompt = {
+    'en': "Please choose the start date for **🔃 Cat acceptance-release**.\nThe end date will be **+1** day of the chosen date.",
+    'ru': "Пожалуйста, выберите начальную дату для **🔃 Приемки-выдачи кошек**.\nДата окончания будет **+1** день от выбранной даты."
+}
+
+notifications_steril_volunteer_acceptance_prompt = {
+    'en': "Please choose the date you want to sign up for **🔃 Cat acceptance**.",
+    'ru': "Пожалуйста, выберите дату, на которую вы хотите записаться для **🔃 Приемки кошек**."
+}
+
+notifications_steril_volunteer_release_date_prompt = {
+    'en': "Please choose the date you want to sign up for **🔃 Cat release**.",
+    'ru': "Пожалуйста, выберите дату, на которую вы хотите записаться для **🔃 Выдачи кошек**."
+}
+
+notifications_steril_volunteer_release_time_prompt = {
+    'en': "Please choose the time you want to sign up for **🔃 Cat release**.",
+    'ru': "Пожалуйста, выберите время, на которое вы хотите записаться для **🔃 Выдачи кошек**."
+}
+
 # region Buttons
 
 button_new_schedule = {
@@ -240,11 +280,6 @@ button_type_cleaning = {
 button_type_medical = {
     'en': "🏥 Medical",
     'ru': "🏥 Медуход"
-}
-
-button_type_steril = {
-    'en': "🔃 Cat acceptance-release",
-    'ru': "🔃 Приемка-выдача кошек"
 }
 
 button_my_schedule = {
@@ -263,8 +298,23 @@ button_notifications = {
 }
 
 button_notifications_steril = {
-    'en': "🔔 Accept-release notifications",
-    'ru': "🔔 Уведомления по приему-выдаче"
+    'en': "🔔 Create new accept-release notification",
+    'ru': "🔔 Создать новое уведомление по приему-выдаче"
+}
+
+button_steril_accept_acceptance = {
+    'en': "🔃 Sign up for a cat acceptance shift",
+    'ru': "🔃 Записаться на смену по приемке кошек"
+}
+
+button_steril_accept_release = {
+    'en': "🔃 Sign up for a cat release shift",
+    'ru': "🔃 Записаться на смену по выдаче кошек"
+}
+
+button_steril_own_dates = {
+    'en': "📅 Choose your own dates",
+    'ru': "📅 Выбрать свои даты"
 }
 
 button_back = {
@@ -346,6 +396,8 @@ button_curator_ignore = {
     'en': "🚫 Ignore",
     'ru': "🚫 Игнорировать"
 }
+
+
 
 # region Error messages
 error_not_registered = {

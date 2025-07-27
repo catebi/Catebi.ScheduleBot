@@ -44,6 +44,13 @@ cleaning_topic_id = None
 medical_topic_id = None
 steril_cat_topic_id = None
 
+# region Functions
+
+# function to format the date in the user's language
+def format_date_by_language(date: datetime, language: str):
+    formatted_date = format_date(date, format='dd.MM, EEEE', locale=language) # use generic format for all languages: 31.12, Monday
+    return f"{formatted_date.split(' ')[0]} {formatted_date.split(' ')[1].capitalize()}" # capitalize the first letter of the day of the week
+
 # Helper function to show loading state and prevent multiple button presses
 async def show_loading_state(event, user_language: str):
     """Show loading message and remove buttons to prevent multiple presses"""
@@ -51,8 +58,6 @@ async def show_loading_state(event, user_language: str):
         await event.edit(loading_text[user_language], buttons=None)
     except Exception as err:
         logging.error(f"Error showing loading state: {err}")
-
-# region Functions
 
 # update volunteers list and schedule
 @airtable_context('update_volunteers')
@@ -171,18 +176,23 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
         notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.roles]
     elif type == 'medical':
         notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_medical' in volunteer.roles]
+    elif type == 'steril':
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'steril_cat_in_out' in volunteer.roles]
     else:
         notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.roles or 'kk_medical' in volunteer.roles]
-    curator = Volunteer.first(formula=match({'telegram_chat_id': curator_id}))
-    text_cleaning = Notification.first(formula=match({'telegram_chat_id': curator_id})).custom_text_cleaning
-    text_medical = Notification.first(formula=match({'telegram_chat_id': curator_id})).custom_text_medical
-    if not date: # if date is not set, use the date from the notification settings
-        date = datetime.now().date() + timedelta(days=int(str(Notification.first(formula=match({'telegram_chat_id': curator_id})).date_threshold).split('+')[1]))
-    if not text_cleaning:
-        text_cleaning = default_cleaning_notification_text[curator.language]
 
-    if not text_medical:
-        text_medical = default_medical_notification_text[curator.language]
+    if type != 'steril':
+        curator = Volunteer.first(formula=match({'telegram_chat_id': curator_id}))
+        text_cleaning = Notification.first(formula=match({'telegram_chat_id': curator_id})).custom_text_cleaning
+        text_medical = Notification.first(formula=match({'telegram_chat_id': curator_id})).custom_text_medical
+
+        if not date: # if date is not set, use the date from the notification settings
+            date = datetime.now().date() + timedelta(days=int(str(Notification.first(formula=match({'telegram_chat_id': curator_id})).date_threshold).split('+')[1]))
+        if not text_cleaning:
+            text_cleaning = default_cleaning_notification_text[curator.language]
+
+        if not text_medical:
+            text_medical = default_medical_notification_text[curator.language]
 
     # count all selected volunteers
     all_volunteers_count = len(notifiable_volunteers)
@@ -200,11 +210,32 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
 
             roles_set = '+'.join(roles_set)
 
-            buttons = [
-                [Button.inline(button_new_schedule[volunteer.language], data=f'new_schedule;{roles_set}')],
-            ]
+            if type == 'steril':
+                buttons = [
+                    [Button.inline(button_steril_accept_acceptance[volunteer.language], data=f'steril_acceptance;{date.timestamp()}')],
+                    [Button.inline(button_steril_accept_release[volunteer.language], data=f'steril_release;{date.timestamp()}')],
+                    [Button.inline(button_curator_ignore[volunteer.language], data='back')]
+                ]
+            else:
+                buttons = [
+                    [Button.inline(button_new_schedule[volunteer.language], data=f'new_schedule;{roles_set}')],
+                ]
 
-            if type != 'all':
+            if type == 'steril':
+                start_date = format_date_by_language(date, volunteer.language)
+                end_date = format_date_by_language(date + timedelta(days=1), volunteer.language)
+                await bot.send_message(
+                    volunteer.telegram_chat_id, 
+                    notifications_steril_message[volunteer.language].format(
+                        start_date, end_date,
+                        start_date,
+                        f"{start_date} и {end_date}" if volunteer.language == 'ru' else f"{start_date} and {end_date}",
+                        end_date
+                    ),
+                    buttons=buttons
+                )
+
+            elif type != 'all':
                 await bot.send_message(
                     volunteer.telegram_chat_id, 
                         text_cleaning.format(format_date_by_language(date, volunteer.language)) if type == 'cleaning' else text_medical.format(format_date_by_language(date, volunteer.language)),
@@ -305,10 +336,7 @@ async def send_curator_notifications():
                     await bot.send_message(curator.telegram_chat_id, text, buttons=buttons)
                     break  # Send only one notification for the closest date and break the loop, delete to notify about all future dates
 
-# function to format the date in the user's language
-def format_date_by_language(date: datetime, language: str):
-    formatted_date = format_date(date, format='dd.MM, EEEE', locale=language) # use generic format for all languages: 31.12, Monday
-    return f"{formatted_date.split(' ')[0]} {formatted_date.split(' ')[1].capitalize()}" # capitalize the first letter of the day of the week
+
 
 # handle custom notification text setting
 custom_text_setting = {}
@@ -474,6 +502,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
 
     if admin_flag:
         buttons.append([Button.inline(button_notifications[language], data='notifications;;')])
+        buttons.append([Button.inline(button_notifications_steril[language], data='notifications_steril;;')])
 
     if update:
         await event.edit(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(today, ', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
@@ -514,12 +543,10 @@ async def callback_handler(event):
                 buttons.append([Button.inline(button_type_cleaning[language], data='new_schedule;cleaning')])
             if 'med' in roles:
                 buttons.append([Button.inline(button_type_medical[language], data='new_schedule;medical')])
-            if 'steril' in roles:
-                buttons.append([Button.inline(button_type_steril[language], data='new_schedule;steril')])
 
 
         type = data.split(';')[1]
-        if type not in ['cleaning', 'medical', 'steril']:
+        if type not in ['cleaning', 'medical']:
             if type == 'cln':
                 type = 'cleaning'
             elif type == 'med':
@@ -532,7 +559,6 @@ async def callback_handler(event):
             available_dates[date] = {}
             available_dates[date]['cleaning'] = 0
             available_dates[date]['medical'] = 0
-            available_dates[date]['steril'] = 0
 
         logging.info(f"Available dates: {available_dates}")
 
@@ -833,6 +859,92 @@ async def callback_handler(event):
             date = datetime.fromtimestamp(float(date))
         all_volunteers_count, received_notifications_count = await send_notifications(event.sender.id, type, date)
         await event.edit(notifications_send_success[language].format(received_notifications_count, all_volunteers_count), buttons=[Button.inline(button_back[language], data='back')])
+
+
+    # ----------------------------------------------------------------------------
+    # Cat acceptance-release notifications
+    # ----------------------------------------------------------------------------
+    if data.startswith('notifications_steril;;'):
+        # ask for the dates
+        today = datetime.now().date()
+        next_saturday = today + timedelta(days=(5 - today.weekday()) % 7)
+        next_sunday = next_saturday + timedelta(days=1)
+        next_next_saturday = next_saturday + timedelta(days=7)
+        next_next_sunday = next_next_saturday + timedelta(days=1)
+
+        # format dates to dd.mm
+        next_saturday_str = format_date_by_language(next_saturday, language)
+        next_sunday_str = format_date_by_language(next_sunday, language)
+        next_next_saturday_str = format_date_by_language(next_next_saturday, language)
+        next_next_sunday_str = format_date_by_language(next_next_sunday, language)
+
+        buttons = [
+            [Button.inline(f"{next_saturday_str} — {next_sunday_str}", data=f'notifications_steril;{next_saturday}')],
+            [Button.inline(f"{next_next_saturday_str} — {next_next_sunday_str}", data=f'notifications_steril;{next_next_saturday}')],
+        ]
+        buttons.append([Button.inline(button_steril_own_dates[language], data='notifications_steril_own_dates;;')])
+        buttons.append([Button.inline(button_back[language], data='back')])
+
+        await event.edit(notifications_steril_curator_dates_prompt[language], buttons=buttons)
+        return
+
+    if data.startswith('notifications_steril_own_dates'):
+        # ask for the dates
+        # build dates buttons for 2 weeks in advance
+        today = datetime.now().date()
+        available_dates = []
+        for i in range(14):
+            date = today + timedelta(days=i)
+            available_dates.append(date)
+        buttons = [
+            [Button.inline(format_date_by_language(date, language), data=f'notifications_steril;{date}') for date in available_dates[i:i+2]] for i in range(0, len(available_dates), 2)
+        ]
+        buttons.append([Button.inline(button_back[language], data='notifications_steril;;')])
+        await event.edit(notifications_steril_curator_start_date_prompt[language], buttons=buttons)
+
+    if data.startswith('notifications_steril;'):
+        _, start = data.split(';')
+        start_date = datetime.strptime(start, '%Y-%m-%d').date()
+        end_date = start_date + timedelta(days=1)
+
+        # show confirmation prompt
+        buttons = [
+            [Button.inline(button_yes[language], data=f'notifications_steril_confirm;{start}')],
+            [Button.inline(button_back[language], data='notifications_steril;;')]
+        ]
+
+        formatted_start_date = format_date_by_language(start_date, language)
+        formatted_end_date = format_date_by_language(end_date, language)
+
+        await event.edit(
+            notifications_steril_curator_confirm_prompt[language].format(
+                notifications_steril_message[language].format(
+                    formatted_start_date, formatted_end_date,
+                    formatted_start_date,
+                    f"{formatted_start_date} и {formatted_end_date}" if language == 'ru' else f"{formatted_start_date} and {formatted_end_date}",
+                    formatted_end_date
+                )
+            ),
+            buttons=buttons
+        )
+
+    if data.startswith('notifications_steril_confirm;'):
+        _, start = data.split(';')
+        start_date = datetime.strptime(start, '%Y-%m-%d').date()
+        end_date = start_date + timedelta(days=1)
+
+        # Show loading state while sending notifications
+        await show_loading_state(event, language)
+
+        # send notifications to all volunteers with 'steril_cat_in_out' role
+        all_volunteers_count, received_notifications_count = await send_notifications(event.sender.id, 'steril', start_date)
+        await event.edit(
+            notifications_send_success[language].format(
+                received_notifications_count, all_volunteers_count
+            ), buttons=[
+                [Button.inline(button_back[language], data='back')]
+            ]
+        )
 
     # Get back
     if data == 'back':
