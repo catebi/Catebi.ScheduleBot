@@ -70,6 +70,7 @@ async def update_volunteers(step: str):
 
     today_volunteers_list = []
     dates_list = []
+    today = datetime.now().date().strftime('%d.%m')
     for date in scheduled_dates:
         date.date = date.date.astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # aggregate volunteers if two are scheduled at the same date
@@ -127,6 +128,7 @@ async def update_volunteers(step: str):
             pin_message = await bot.send_message(
                 topic_input_entity,
                 general_schedule['ru'].format(
+                    today,
                     ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
                     '\n'.join(dates_list)
                 ),
@@ -141,6 +143,7 @@ async def update_volunteers(step: str):
     if step != 'startup':
         for id, setting_key, _ in messages:
             await bot.edit_message(topic_input_entity, id, general_schedule['ru'].format(
+                today,
                 ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
                 '\n'.join(dates_list)
             ))
@@ -429,6 +432,8 @@ async def set_topic_handler(event):
 @airtable_context('schedule_handler')
 async def schedule_handler(event, language: str = 'en', update: bool = False):
     global today_volunteers_list, dates_list
+
+    today = datetime.now().date().strftime('%d.%m')
     # check if user exists in Airtable
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
     if not user:
@@ -439,6 +444,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
     # if not in private chat just send general schedule
     if not event.is_private:
         await event.reply(general_schedule[language].format( # reply, to handle topics correctly
+            today,
             ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
             '\n'.join(dates_list)
         ))
@@ -470,20 +476,21 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
         buttons.append([Button.inline(button_notifications[language], data='notifications;;')])
 
     if update:
-        await event.edit(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
+        await event.edit(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(today, ', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
         return
 
-    await event.respond(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
+    await event.respond(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(today, ', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
 
 # region Buttons
 @bot.on(events.CallbackQuery())
 @logger
 @airtable_context('callback_handler')
 async def callback_handler(event):
-    global scheduled_dates, today_volunteers_list, dates_list, custom_text_setting, topic_input_entity, cleaning_topic_id, medical_topic_id
+    global scheduled_dates, today_volunteers_list, dates_list, custom_text_setting, topic_input_entity, cleaning_topic_id, medical_topic_id, steril_cat_topic_id
 
     data = str(event.data.decode("utf-8"))
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
+    today = datetime.now().date().strftime('%d.%m')
 
     # Change user's language
     if data.startswith('language'):
@@ -512,6 +519,12 @@ async def callback_handler(event):
 
 
         type = data.split(';')[1]
+        if type not in ['cleaning', 'medical', 'steril']:
+            if type == 'cln':
+                type = 'cleaning'
+            elif type == 'med':
+                type = 'medical'
+
         # prepare a list of available dates, from today to 2 weeks in advance
         available_dates = {}
         for i in range(14):
@@ -519,6 +532,7 @@ async def callback_handler(event):
             available_dates[date] = {}
             available_dates[date]['cleaning'] = 0
             available_dates[date]['medical'] = 0
+            available_dates[date]['steril'] = 0
 
         logging.info(f"Available dates: {available_dates}")
 
@@ -692,6 +706,7 @@ async def callback_handler(event):
                 translated_dates.append(item)
         await event.edit(
             general_schedule[language].format(
+                today,
                 ', '.join(today_volunteers_list) if today_volunteers_list else '😿',
                 '\n'.join(dates_list if language == 'en' else translated_dates)),
             buttons=[Button.inline(button_back[language], data='back')]

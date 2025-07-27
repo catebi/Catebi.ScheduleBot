@@ -57,8 +57,8 @@ main_menu_header = {
 }
 
 todays_volunteers = {
-    'en': "Today's volunteers: {}",
-    'ru': "Дежурные сегодня: {}"
+    'en': "Today's volunteers, {}: {}",
+    'ru': "Дежурные сегодня, {}: {}"
 }
 
 new_schedule_type_prompt = {
@@ -118,7 +118,7 @@ my_schedule_delete_prompt = {
 general_schedule = {
     'en': """📆 CatFlat schedule
 
-Today's volunteers: {}
+Today's volunteers, {}: {}
 
 Other dates:
 {}
@@ -126,7 +126,7 @@ Other dates:
 
     'ru': """📆 Дежурства в кото-квартире
 
-Дежурства сегодня: {}
+Дежурства сегодня, {}: {}
 
 Другие даты:
 {}
