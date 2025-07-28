@@ -81,7 +81,7 @@ async def update_volunteers(step: str):
         # aggregate volunteers if two are scheduled at the same date
         if date.date.date() == datetime.now().date():
             today_volunteers_list.append(
-                ('🧹'+date.volunteer.telegram if date.type == 'cleaning' 
+                ('🧹'+date.volunteer.telegram if date.type == 'cleaning'
                  else '🏥'+date.volunteer.telegram if date.type == 'medical'
                  else '😸⬆️'+date.volunteer.telegram if date.type == 'steril_release'
                  else '😸⬇️'+date.volunteer.telegram) + (f' ({date.date.strftime('%H:%M')})') if date.type != 'steril_acceptance' else '')
@@ -105,7 +105,7 @@ async def update_volunteers(step: str):
 
     # update messages in topics
     settings = Settings.all()
-    settings_dict = {setting.key: setting.test_value for setting in settings}
+    settings_dict = {setting.key: setting.value for setting in settings}
 
     if not settings_dict.get('topic_chat_id'):
         logging.error(f"<{step}> Topic chat ID is not set, please set it in the settings.")
@@ -149,7 +149,7 @@ async def update_volunteers(step: str):
             )
             await bot.pin_message(topic_input_entity, pin_message.id)
             setting = Settings.first(formula=match({'key': setting_key}))
-            setting.test_value = pin_message.id
+            setting.value = pin_message.id
             setting.save()
 
     # update messages in topics
@@ -173,7 +173,7 @@ async def update_volunteers(step: str):
                 logging.info(f"<{step}> Re-pinning message {id} in topic {topic}")
                 await bot.pin_message(topic_input_entity, id)
                 setting = Settings.first(formula=match({'key': setting_key}))
-                setting.test_value = id
+                setting.value = id
                 setting.save()
 
     logging.info(f"<{step}> Messages in topics updated.")
@@ -236,7 +236,7 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
                 start_date = format_date_by_language(date, volunteer.language)
                 end_date = format_date_by_language(date + timedelta(days=1), volunteer.language)
                 await bot.send_message(
-                    volunteer.telegram_chat_id, 
+                    volunteer.telegram_chat_id,
                     notifications_steril_message[volunteer.language].format(
                         start_date, end_date,
                         start_date,
@@ -248,13 +248,13 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
 
             elif type != 'all':
                 await bot.send_message(
-                    volunteer.telegram_chat_id, 
+                    volunteer.telegram_chat_id,
                         text_cleaning.format(format_date_by_language(date, volunteer.language)) if type == 'cleaning' else text_medical.format(format_date_by_language(date, volunteer.language)),
                     buttons=buttons
                 )
             else:
                 await bot.send_message(
-                    volunteer.telegram_chat_id, 
+                    volunteer.telegram_chat_id,
                     text_cleaning.format(format_date_by_language(date, volunteer.language)) + '\n\n' + text_medical.format(format_date_by_language(date, volunteer.language)),
                     buttons=buttons
                 )
@@ -311,7 +311,7 @@ async def send_curator_notifications():
             start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.now().astimezone().tzinfo)
             end_date = start_date + timedelta(days=int(str(curator_settings.date_threshold).split('+')[1]))
             end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-            
+
             for date in (start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)):
                 logging.info(f"Checking for volunteers for {date} for {curator.telegram}")
                 # Get all schedules for the current date in a single query
@@ -323,7 +323,7 @@ async def send_curator_notifications():
                     formula=formula,
                     fields=['type']
                 )
-                
+
                 buttons = []
                 text = ''
                 if not schedules:
@@ -334,7 +334,7 @@ async def send_curator_notifications():
                 else:
                     # Check if specific types are missing
                     schedule_types = [s.type for s in schedules]
-                    
+
                     if 'cleaning' not in schedule_types:
                     # No cleaning volunteers found
                         logging.info(f"No cleaning volunteers found for {date} for {curator.telegram}, sending notification.")
@@ -345,7 +345,7 @@ async def send_curator_notifications():
                         logging.info(f"No medical volunteers found for {date} for {curator.telegram}, sending notification.")
                         buttons.append([Button.inline(button_curator_notifications_send_medical[curator.language], data=f'notifications_send;medical;{date.timestamp()}')])
                         text = notifications_no_medical_volunteers[curator.language].format(format_date_by_language(date, curator.language))
-                
+
                 if text:
                     buttons.append([Button.inline(button_curator_ignore[curator.language], data='back')])
                     await bot.send_message(curator.telegram_chat_id, text, buttons=buttons)
@@ -656,14 +656,7 @@ async def callback_handler(event):
     if data.startswith('add_schedule'):
         # Show loading state while saving to Airtable
         await show_loading_state(event, language)
-
-        if len(data.split(';')) < 5:
-            _, date, time, type = data.split(';')
-            extra = ''
-        else:
-            _, date, time, type, extra = data.split(';')
-        if time == '':
-            time = '00:00'  # default time if not set
+        _, date, time, type = data.split(';')
         date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # add a new record to the Schedule table
         Schedule(
@@ -742,7 +735,7 @@ async def callback_handler(event):
     if data == 'my_schedule':
         # Show loading state while fetching data from Airtable
         await show_loading_state(event, language)
-        
+
         # get a list of scheduled dates
         scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id, 'date': ('>=', datetime.now().date())}), sort=['date'])
         for date in scheduled_dates:
@@ -796,7 +789,7 @@ async def callback_handler(event):
     if data.startswith('delete_schedule'):
         # Show loading state while deleting from Airtable
         await show_loading_state(event, language)
-        
+
         _, _date, type = data.split(';')
         date = datetime.strptime(_date, '%Y-%m-%d %H:%M:%S').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # delete a record from the Schedule table
@@ -806,7 +799,7 @@ async def callback_handler(event):
         else:
             logging.error(f"Record not found: {event.sender.id}, {date}, {type}; probably already deleted.")
         await update_volunteers('delete_schedule')
-        
+
         if not topic_input_entity:
             logging.error("Topic chat ID is not set, please set it in the settings.")
             return
@@ -881,7 +874,7 @@ async def callback_handler(event):
     #--------------------------------------------------------------------------
     # Admin menu
     #--------------------------------------------------------------------------
-    if data.startswith('notifications;;') or data.startswith('notifications;unset;') or data.startswith('notifications;reset;'):        
+    if data.startswith('notifications;;') or data.startswith('notifications;unset;') or data.startswith('notifications;reset;'):
         _, action, type = data.split(';')
         logging.info(f"Notifications settings: {action}, {type}")
         if action == 'unset':
@@ -954,7 +947,7 @@ async def callback_handler(event):
         buttons.append([Button.inline(button_back[language], data='notifications;;')])
         await event.edit(notifications_settings_notify_at_prompt[language], buttons=buttons)
 
-    if data.startswith('notifications_settings_notify_at;'):        
+    if data.startswith('notifications_settings_notify_at;'):
         _, time_str = data.split(';')
         hour, minute = time_str.split(':')
         admin = Notification.first(formula=match({'telegram_chat_id': event.sender.id}))
@@ -1105,6 +1098,93 @@ async def callback_handler(event):
         await event.edit(
             notifications_steril_volunteer_acceptance_prompt[language] if type == 'acceptance' else notifications_steril_volunteer_release_date_prompt[language],
             buttons=buttons
+        )
+
+    if data.startswith('steril_release') and data.split(';')[3] == '':
+        curator = data.split(';')[1]
+        date = datetime.strptime(data.split(';')[2], '%Y-%m-%d').date()
+        # show prompt to choose time
+        buttons = []
+        for i in range(0, 24, 4):
+            row = []
+            for j in range(i, min(i + 4, 24)):
+                row.append(Button.inline(f"{j:02d}:00", data=f'steril_release;{curator};{date};{j:02d}:00'))
+            buttons.append(row)
+        await event.edit(
+            notifications_steril_volunteer_release_time_prompt[language].format(format_date_by_language(date, language)),
+            buttons=buttons
+        )
+        return
+
+    if data.startswith('steril_'):
+        type, curator, date, time = data.split(';')
+        date = datetime.strptime(date, '%Y-%m-%d')
+        if time:
+            time = datetime.strptime(time, '%H:%M').time().replace(second=0, microsecond=0)
+            date = datetime.combine(date, time).astimezone(datetime.now().astimezone().tzinfo)
+
+        await show_loading_state(event, language)  # Show loading state while saving to Airtable
+
+        # add a new record to the Schedule table
+        Schedule(
+            telegram_chat_id=event.sender.id,
+            date=date,
+            telegram='@' + str(event.sender.username).lower(),
+            volunteer=user,
+            type=type
+        ).save()
+
+        await update_volunteers('add_schedule')
+
+        if type == 'steril_acceptance':
+            await event.edit(
+                add_schedule_success_steril_acceptance[language].format(
+                    button_type_steril_acceptance[language],
+                    format_date_by_language(date, language)
+                ),
+                buttons=[Button.inline(button_back[language], data='back')]
+            )
+        else:
+            await event.edit(
+                add_schedule_success[language].format(
+                    button_type_steril_release[language],
+                    format_date_by_language(date, language),
+                    time
+                ),
+                buttons=[Button.inline(button_back[language], data='back')]
+            )
+
+        if not topic_input_entity:
+            logging.error("Topic chat ID is not set, please set it in the settings.")
+            return
+
+        if type == 'steril_acceptance':
+            await bot.send_message(
+                topic_input_entity,
+                add_schedule_topic_steril_acceptance_message.format(
+                    '⬇️',
+                    user.telegram,
+                    'сегодня' if date.date() == datetime.now().date() else 'завтра' if date.date() == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
+                ),
+                reply_to=steril_cat_topic_id
+            )
+        else:
+            await bot.send_message(
+                topic_input_entity,
+                add_schedule_topic_message.format(
+                    '⬆️',
+                    user.telegram,
+                    'выдаче кошков',
+                    'сегодня' if date.date() == datetime.now().date() else 'завтра' if date.date() == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
+                    time
+                ),
+                reply_to=steril_cat_topic_id
+            )
+
+        # send a message to the curator
+        await bot.send_message(
+            int(curator),
+            f"🔔 Новая запись на {'приёмку' if type == 'steril_acceptance' else 'выдачу'} кошков от {user.telegram} на {format_date_by_language(date, language)}."
         )
 
     # Get back
