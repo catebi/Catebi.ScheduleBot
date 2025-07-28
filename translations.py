@@ -66,14 +66,9 @@ new_schedule_type_prompt = {
     'ru': "❓ Выберите тип дежурства, на которое хотите записаться."
 }
 
-new_schedule_prompt_cleaning = {
-    'en': "Choose a date you want to sign up for **🧹 Cleaning**\n\nP.S. The date is hidden if there's two volunteers already signed up for it.",
-    'ru': "Выберите дату для смены **🧹 Уборка**, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже записались два волонтера."
-}
-
-new_schedule_prompt_medical = {
-    'en': "Choose a date you want to sign up for **🏥Medical**\n\nP.S. The date is hidden if there's a medical shift already assigned on that date.",
-    'ru': "Выберите дату для смены **🏥 Медуход**, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже назначена медицинская смена."
+new_schedule_prompt = {
+    'en': "Choose a date you want to sign up for **{}**\n\nP.S. The date is hidden if there's enough volunteers already signed up for it.",
+    'ru': "Выберите дату для смены **{}**, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже записались достаточно волонтёров."
 }
 
 set_schedule_time_prompt = {
@@ -105,6 +100,11 @@ delete_schedule_success = {
     'ru': "Вы успешно удалили свою запись **{}** на **{}** в **{}**."
 }
 
+delete_schedule_success_steril_acceptance = {
+    'en': "You have successfully deleted your **{}** registration for **{}**.",
+    'ru': "Вы успешно удалили свою запись **{}** на **{}**."
+}
+
 delete_schedule_topic_message = "⛔{} {} удалил/а свою запись на дежурство по {} на **{}** в **{}** 😿"
 
 delete_schedule_topic_steril_acceptance_message = "⛔{} {} удалил/а свою запись на приемку кошек на **{}** 😿"
@@ -117,6 +117,11 @@ my_schedule_prompt = {
 my_schedule_delete_prompt = {
     'en': "Do you want to delete your **{}** registration for **{}** on **{}**?",
     'ru': "Вы хотите удалить свою запись **{}** на **{}** в **{}**?"
+}
+
+my_schedule_delete_prompt_steril_acceptance = {
+    'en': "Do you want to delete your **{}** registration for **{}**?",
+    'ru': "Вы хотите удалить свою запись **{}** на **{}**?"
 }
 
 general_schedule = {
@@ -157,11 +162,6 @@ notifications_menu = {
 notifications_settings_text_menu = {
     'en': "🔔 Custom text notifications menu.\nPlease choose the notification type you want to customize.",
     'ru': "🔔 Меню настроек текста уведомлений.\nПожалуйста, выберите тип уведомления, который хотите настроить."
-}
-
-notifications_menu_steril = {
-    'en': "🔔 Accept-release notifications menu.\n\nYour current settings are:\n__Accept-release notification text:__\n{}",
-    'ru': "🔔 Меню уведомлений по приему-выдаче.\n\nВаши текущие настройки:\n__Текст уведомления по приему-выдаче__\n{}"
 }
 
 default_cleaning_notification_text = {

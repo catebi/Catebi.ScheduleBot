@@ -499,6 +499,9 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
         roles_set.append('cln')
     if 'kk_medical' in user.roles:
         roles_set.append('med')
+    if 'steril_cat_in_out' in user.roles:
+        roles_set.append('steril_acceptance')
+        roles_set.append('steril_release')
 
     if not roles_set:
         roles_set = 'none'
@@ -556,16 +559,25 @@ async def callback_handler(event):
                 buttons.append([Button.inline(button_type_cleaning[language], data='new_schedule;cleaning')])
             if 'med' in roles:
                 buttons.append([Button.inline(button_type_medical[language], data='new_schedule;medical')])
+            if 'steril_acceptance' in roles:
+                buttons.append([Button.inline(button_type_steril_acceptance[language], data='new_schedule;steril_acceptance')])
+            if 'steril_release' in roles:
+                buttons.append([Button.inline(button_type_steril_release[language], data='new_schedule;steril_release')])
             buttons.append([Button.inline(button_back[language], data='back')])
             await event.edit(new_schedule_type_prompt[language], buttons=buttons)
             return
 
         type = data.split(';')[1]
-        if type not in ['cleaning', 'medical']:
+        if type not in ['cleaning', 'medical', 'steril_acceptance', 'steril_release']:
             if type == 'cln':
                 type = 'cleaning'
             elif type == 'med':
                 type = 'medical'
+            elif type == 'steril_acceptance':
+                type = 'steril_acceptance'
+            elif type == 'steril_release':
+                type = 'steril_release'
+
 
         # prepare a list of available dates, from today to 2 weeks in advance
         available_dates = {}
@@ -601,14 +613,26 @@ async def callback_handler(event):
         # show a list of available dates
         buttons = [
             [Button.inline(f"{format_date_by_language(date, language)} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}",
-                           data=f'set_schedule_time;{date};{type}')] for date in available_dates
+                           data=f'add_schedule;{date};;{type}' if type == 'steril_acceptance' else f'set_schedule_time;{date};{type}')] for date in available_dates
         ]
         buttons.append([Button.inline(button_back[language], data='back')])
-        await event.edit(new_schedule_prompt_cleaning[language] if type == 'cleaning' else new_schedule_prompt_medical[language], buttons=buttons)
+        await event.edit(new_schedule_prompt[language].format(
+                                button_type_cleaning[language] if type == 'cleaning' else
+                                button_type_medical[language] if type == 'medical' else
+                                button_type_steril_acceptance[language] if type == 'steril_acceptance' else
+                                button_type_steril_release[language]
+                            ),
+                            buttons=buttons
+                        )
 
     # Ask for the time of the scheduled date
-    if data.startswith('set_schedule_time'):
-        _, date, type = data.split(';')
+    if data.startswith('set_schedule_time') and data.split(';')[2] not in ['steril_acceptance']:
+        if len(data.split(';')) < 4:
+            _, date, type = data.split(';')
+            extra = ''
+        else:
+            _, date, type, extra = data.split(';')
+
         date = datetime.strptime(date, '%Y-%m-%d').date()
         # Get current time
         current_time = datetime.now()
@@ -622,7 +646,7 @@ async def callback_handler(event):
             row = []
             for i in range(j, min(j + 4, 24)):
                 if i >= start_hour:
-                    row.append(Button.inline(f"{i:02d}:00", data=f'add_schedule;{date};{i:02d}:00;{type}'))
+                    row.append(Button.inline(f"{i:02d}:00", data=f'add_schedule;{date};{i:02d}:00;{type};{extra}'))
             if row:  # Only add non-empty rows
                 buttons.append(row)
         buttons.append([Button.inline(button_back[language], data='back')])
@@ -632,7 +656,6 @@ async def callback_handler(event):
     if data.startswith('add_schedule'):
         # Show loading state while saving to Airtable
         await show_loading_state(event, language)
-
         _, date, time, type = data.split(';')
         date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # add a new record to the Schedule table
@@ -644,9 +667,36 @@ async def callback_handler(event):
             type=type
         ).save()
         await update_volunteers('add_schedule')
+        if type == 'steril_acceptance':
+            # If steril acceptance, send a special message
+            await event.edit(
+                add_schedule_success_steril_acceptance[language].format(
+                    button_type_steril_acceptance[language],
+                    format_date_by_language(date, language)
+                ),
+                buttons=[Button.inline(button_back[language], data='back')]
+            )
+
+            if not topic_input_entity:
+                logging.error("Topic chat ID is not set, please set it in the settings.")
+                return
+
+            await bot.send_message(
+                topic_input_entity,
+                add_schedule_topic_steril_acceptance_message.format(
+                    '😸⬇️',
+                    user.telegram,
+                    'сегодня' if date == datetime.now().date() else 'завтра' if date == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
+                ),
+                reply_to=steril_cat_topic_id
+            )
+            return
+
         await event.edit(
             add_schedule_success[language].format(
-                button_type_cleaning[language] if type == 'cleaning' else button_type_medical[language],
+                button_type_cleaning[language] if type == 'cleaning' \
+                else button_type_medical[language] if type == 'medical' \
+                else button_type_steril_release[language],
                 format_date_by_language(date, language),
                 date.strftime('%H:%M')
             ),
@@ -658,14 +708,28 @@ async def callback_handler(event):
         await bot.send_message(
             topic_input_entity,
             add_schedule_topic_message.format(
-                '🏥' if type == 'medical' else '🧹',
+                '🏥' if type == 'medical' \
+                else '🧹' if type == 'cleaning' \
+                else '😸⬆️',
                 user.telegram,
-                'медуходу' if type == 'medical' else 'уборке',
+                'медуходу' if type == 'medical' \
+                else 'уборке' if type == 'cleaning' \
+                else 'выдаче кошков',
                 'сегодня' if date == datetime.now().date() else 'завтра' if date == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
                 date.strftime('%H:%M')
             ),
-            reply_to=cleaning_topic_id if type == 'cleaning' else medical_topic_id
+            reply_to=cleaning_topic_id if type == 'cleaning' \
+                else medical_topic_id if type == 'medical' \
+                else steril_cat_topic_id
         )
+
+        if extra:
+            # send the message to the curator if extra is set
+            curator = int(extra)
+            await bot.send_message(
+                curator,
+                f"🔔 Новая запись на {'приёмку' if type == 'steril_acceptance' else 'выдачу'} кошков от {user.telegram} на {format_date_by_language(date, language)}."
+            )
 
     # View my scheduled dates
     if data == 'my_schedule':
@@ -698,6 +762,17 @@ async def callback_handler(event):
             [Button.inline(button_yes[language], data=f'delete_schedule;{date};{type}')],
             [Button.inline(button_back[language], data='back')]
         ]
+
+        if type == 'steril_acceptance':
+            await event.edit(
+                my_schedule_delete_prompt_steril_acceptance[language].format(
+                    button_type_steril_acceptance[language],
+                    format_date_by_language(date, language),
+                ),
+                buttons=buttons
+            )
+            return
+
         await event.edit(
             my_schedule_delete_prompt[language].format(
                 button_type_cleaning[language] if type == 'cleaning'
@@ -724,22 +799,21 @@ async def callback_handler(event):
         else:
             logging.error(f"Record not found: {event.sender.id}, {date}, {type}; probably already deleted.")
         await update_volunteers('delete_schedule')
-        await event.edit(
-            delete_schedule_success[language].format(
-                button_type_cleaning[language] if type == 'cleaning'
-                else button_type_medical[language] if type == 'medical'
-                else button_type_steril_release[language] if type == 'steril_release'
-                else button_type_steril_acceptance[language],
-                format_date_by_language(date, language),
-                date.strftime('%H:%M')
-            ),
-            buttons=[Button.inline(button_back[language], data='back')]
-        )
+
         if not topic_input_entity:
             logging.error("Topic chat ID is not set, please set it in the settings.")
             return
 
         if type == 'steril_acceptance':
+            # If steril acceptance, send a special message
+            await event.edit(
+                delete_schedule_success_steril_acceptance[language].format(
+                    button_type_steril_acceptance[language],
+                    format_date_by_language(date, language)
+                ),
+                buttons=[Button.inline(button_back[language], data='back')]
+            )
+
             await bot.send_message(
                 topic_input_entity,
                 delete_schedule_topic_steril_acceptance_message.format(
@@ -750,6 +824,17 @@ async def callback_handler(event):
                 reply_to=steril_cat_topic_id
             )
             return
+
+        await event.edit(
+            delete_schedule_success[language].format(
+                button_type_cleaning[language] if type == 'cleaning'
+                else button_type_medical[language] if type == 'medical'
+                else button_type_steril_release[language],
+                format_date_by_language(date, language),
+                date.strftime('%H:%M')
+            ),
+            buttons=[Button.inline(button_back[language], data='back')]
+        )
 
         await bot.send_message(
             topic_input_entity,
@@ -998,10 +1083,18 @@ async def callback_handler(event):
         curator = data.split(';')[1]
         date = datetime.fromtimestamp(float(data.split(';')[2])).date()
         # show prompt to choose date
-        buttons = [
-            [Button.inline(format_date_by_language(date, language), data=f'steril_{type};{curator};{date};')],
-            [Button.inline(format_date_by_language(date + timedelta(days=1), language), data=f'steril_{type};{curator};{date + timedelta(days=1)};')]
-        ]
+        if type == 'acceptance':
+            buttons = [
+                [Button.inline(format_date_by_language(date, language), data=f'add_schedule;{date};;steril_{type};{curator}')],
+                [Button.inline(format_date_by_language(date + timedelta(days=1), language), data=f'add_schedule;{date + timedelta(days=1)};;steril_{type};{curator}')]
+            ]
+        # or time if it's release shift
+        else:
+            buttons = [
+                [Button.inline(format_date_by_language(date, language), data=f'set_schedule_time;{date};steril_{type};{curator}')],
+                [Button.inline(format_date_by_language(date + timedelta(days=1), language), data=f'set_schedule_time;{date + timedelta(days=1)};steril_{type};{curator}')]
+            ]
+
         await event.edit(
             notifications_steril_volunteer_acceptance_prompt[language] if type == 'acceptance' else notifications_steril_volunteer_release_date_prompt[language],
             buttons=buttons
