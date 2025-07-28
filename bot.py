@@ -656,7 +656,14 @@ async def callback_handler(event):
     if data.startswith('add_schedule'):
         # Show loading state while saving to Airtable
         await show_loading_state(event, language)
-        _, date, time, type = data.split(';')
+
+        if len(data.split(';')) < 5:
+            _, date, time, type = data.split(';')
+            extra = ''
+        else:
+            _, date, time, type, extra = data.split(';')
+        if time == '':
+            time = '00:00'  # default time if not set
         date = datetime.strptime(f"{date} {time}", '%Y-%m-%d %H:%M').astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # add a new record to the Schedule table
         Schedule(
@@ -1098,93 +1105,6 @@ async def callback_handler(event):
         await event.edit(
             notifications_steril_volunteer_acceptance_prompt[language] if type == 'acceptance' else notifications_steril_volunteer_release_date_prompt[language],
             buttons=buttons
-        )
-
-    if data.startswith('steril_release') and data.split(';')[3] == '':
-        curator = data.split(';')[1]
-        date = datetime.strptime(data.split(';')[2], '%Y-%m-%d').date()
-        # show prompt to choose time
-        buttons = []
-        for i in range(0, 24, 4):
-            row = []
-            for j in range(i, min(i + 4, 24)):
-                row.append(Button.inline(f"{j:02d}:00", data=f'steril_release;{curator};{date};{j:02d}:00'))
-            buttons.append(row)
-        await event.edit(
-            notifications_steril_volunteer_release_time_prompt[language].format(format_date_by_language(date, language)),
-            buttons=buttons
-        )
-        return
-
-    if data.startswith('steril_'):
-        type, curator, date, time = data.split(';')
-        date = datetime.strptime(date, '%Y-%m-%d')
-        if time:
-            time = datetime.strptime(time, '%H:%M').time().replace(second=0, microsecond=0)
-            date = datetime.combine(date, time).astimezone(datetime.now().astimezone().tzinfo)
-
-        await show_loading_state(event, language)  # Show loading state while saving to Airtable
-
-        # add a new record to the Schedule table
-        Schedule(
-            telegram_chat_id=event.sender.id,
-            date=date,
-            telegram='@' + str(event.sender.username).lower(),
-            volunteer=user,
-            type=type
-        ).save()
-
-        await update_volunteers('add_schedule')
-
-        if type == 'steril_acceptance':
-            await event.edit(
-                add_schedule_success_steril_acceptance[language].format(
-                    button_type_steril_acceptance[language],
-                    format_date_by_language(date, language)
-                ),
-                buttons=[Button.inline(button_back[language], data='back')]
-            )
-        else:
-            await event.edit(
-                add_schedule_success[language].format(
-                    button_type_steril_release[language],
-                    format_date_by_language(date, language),
-                    time
-                ),
-                buttons=[Button.inline(button_back[language], data='back')]
-            )
-
-        if not topic_input_entity:
-            logging.error("Topic chat ID is not set, please set it in the settings.")
-            return
-
-        if type == 'steril_acceptance':
-            await bot.send_message(
-                topic_input_entity,
-                add_schedule_topic_steril_acceptance_message.format(
-                    '⬇️',
-                    user.telegram,
-                    'сегодня' if date.date() == datetime.now().date() else 'завтра' if date.date() == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
-                ),
-                reply_to=steril_cat_topic_id
-            )
-        else:
-            await bot.send_message(
-                topic_input_entity,
-                add_schedule_topic_message.format(
-                    '⬆️',
-                    user.telegram,
-                    'выдаче кошков',
-                    'сегодня' if date.date() == datetime.now().date() else 'завтра' if date.date() == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
-                    time
-                ),
-                reply_to=steril_cat_topic_id
-            )
-
-        # send a message to the curator
-        await bot.send_message(
-            int(curator),
-            f"🔔 Новая запись на {'приёмку' if type == 'steril_acceptance' else 'выдачу'} кошков от {user.telegram} на {format_date_by_language(date, language)}."
         )
 
     # Get back
