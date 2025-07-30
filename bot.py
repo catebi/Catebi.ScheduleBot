@@ -44,6 +44,8 @@ cleaning_topic_id = None
 medical_topic_id = None
 steril_cat_topic_id = None
 
+steril_notification_message = None
+
 # region Functions
 
 # function to format the date in the user's language
@@ -181,6 +183,8 @@ async def update_volunteers(step: str):
 # send notifications to volunteers, return the number of sent notifications and the total number of volunteers
 @airtable_context('send_notifications')
 async def send_notifications(curator_id: int, type: str = '', date: datetime = None):
+    global steril_notification_message
+
     # send notifications to all volunteers with roles kk_cleaning
     volunteers = Volunteer.all(fields=['telegram_chat_id', 'language', 'volunteer_roles'])
     if type == 'cleaning':
@@ -235,7 +239,7 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
             if type == 'steril':
                 start_date = format_date_by_language(date, volunteer.language)
                 end_date = format_date_by_language(date + timedelta(days=1), volunteer.language)
-                await bot.send_message(
+                steril_notification_message = await bot.send_message(
                     volunteer.telegram_chat_id,
                     notifications_steril_message[volunteer.language].format(
                         start_date, end_date,
@@ -531,7 +535,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
 @logger
 @airtable_context('callback_handler')
 async def callback_handler(event):
-    global scheduled_dates, today_volunteers_list, dates_list, custom_text_setting, topic_input_entity, cleaning_topic_id, medical_topic_id, steril_cat_topic_id
+    global scheduled_dates, today_volunteers_list, dates_list, custom_text_setting, topic_input_entity, cleaning_topic_id, medical_topic_id, steril_cat_topic_id, steril_notification_message
 
     data = str(event.data.decode("utf-8"))
     user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
@@ -1102,9 +1106,19 @@ async def callback_handler(event):
                 [Button.inline(format_date_by_language(date + timedelta(days=1), language), data=f'set_schedule_time;{date + timedelta(days=1)};steril_{type};{curator}')]
             ]
 
+        buttons.append([Button.inline(button_back[language], data='back_steril')])
+
         await event.edit(
             notifications_steril_volunteer_acceptance_prompt[language] if type == 'acceptance' else notifications_steril_volunteer_release_date_prompt[language],
             buttons=buttons
+        )
+
+    if data == 'back_steril':
+        # Go back to the steril notification for choosing another shift type
+        await event.edit(
+            steril_notification_message.message,
+            buttons=steril_notification_message.buttons,
+            formatting_entities=steril_notification_message.entities
         )
 
     # Get back
