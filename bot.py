@@ -239,29 +239,41 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
             if type == 'steril':
                 start_date = format_date_by_language(date, volunteer.language)
                 end_date = format_date_by_language(date + timedelta(days=1), volunteer.language)
-                steril_notification_message = await bot.send_message(
-                    volunteer.telegram_chat_id,
-                    notifications_steril_message[volunteer.language].format(
-                        start_date, end_date,
-                        start_date,
-                        f"{start_date} и {end_date}" if volunteer.language == 'ru' else f"{start_date} and {end_date}",
-                        end_date
-                    ),
-                    buttons=buttons
-                )
+                try:
+                    steril_notification_message = await bot.send_message(
+                        volunteer.telegram_chat_id,
+                        notifications_steril_message[volunteer.language].format(
+                            start_date, end_date,
+                            start_date,
+                            f"{start_date} и {end_date}" if volunteer.language == 'ru' else f"{start_date} and {end_date}",
+                            end_date
+                        ),
+                        buttons=buttons
+                    )
+                except Exception as err:
+                    logging.error(f"Error sending steril notification to {volunteer.telegram_chat_id}: {err}", exc_info=True)
+                    continue
 
             elif type != 'all':
-                await bot.send_message(
-                    volunteer.telegram_chat_id,
-                        text_cleaning.format(format_date_by_language(date, volunteer.language)) if type == 'cleaning' else text_medical.format(format_date_by_language(date, volunteer.language)),
-                    buttons=buttons
-                )
+                try:
+                    await bot.send_message(
+                        volunteer.telegram_chat_id,
+                            text_cleaning.format(format_date_by_language(date, volunteer.language)) if type == 'cleaning' else text_medical.format(format_date_by_language(date, volunteer.language)),
+                        buttons=buttons
+                    )
+                except Exception as err:
+                    logging.error(f"Error sending '{type}' notification to {volunteer.telegram_chat_id}: {err}", exc_info=True)
+                    continue
             else:
-                await bot.send_message(
-                    volunteer.telegram_chat_id,
-                    text_cleaning.format(format_date_by_language(date, volunteer.language)) + '\n\n' + text_medical.format(format_date_by_language(date, volunteer.language)),
-                    buttons=buttons
-                )
+                try:
+                    await bot.send_message(
+                        volunteer.telegram_chat_id,
+                        text_cleaning.format(format_date_by_language(date, volunteer.language)) + '\n\n' + text_medical.format(format_date_by_language(date, volunteer.language)),
+                        buttons=buttons
+                    )
+                except Exception as err:
+                    logging.error(f"Error sending 'all' notification to {volunteer.telegram_chat_id}: {err}", exc_info=True)
+                    continue
 
             await asyncio.sleep(0.5) # avoid flood limits
             received_notifications_count += 1
