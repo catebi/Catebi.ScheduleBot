@@ -188,13 +188,13 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
     # send notifications to all volunteers with duties kk_cleaning
     volunteers = Volunteer.all(fields=['telegram_chat_id', 'language', 'duty_codes'])
     if type == 'cleaning':
-        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.duty_codes]
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.duties]
     elif type == 'medical':
-        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_medical' in volunteer.duty_codes]
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_medical' in volunteer.duties]
     elif type == 'steril':
-        notifiable_volunteers = [volunteer for volunteer in volunteers if 'steril_cat_in_out' in volunteer.duty_codes]
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'steril_cat_in_out' in volunteer.duties]
     else:
-        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.duty_codes or 'kk_medical' in volunteer.duty_codes]
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.duties or 'kk_medical' in volunteer.duties]
 
     if type != 'steril':
         curator = Volunteer.first(formula=match({'telegram_chat_id': curator_id}))
@@ -216,11 +216,11 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
     for volunteer in notifiable_volunteers:
         try:
             duties_set = []
-            if 'kk_cleaning' in volunteer.duty_codes:
+            if 'kk_cleaning' in volunteer.duties:
                 duties_set.append('cln')
-            if 'kk_medical' in volunteer.duty_codes:
+            if 'kk_medical' in volunteer.duties:
                 duties_set.append('med')
-            if 'steril_cat_in_out' in volunteer.duty_codes:
+            if 'steril_cat_in_out' in volunteer.duties:
                 duties_set.append('steril')
 
             duties_set = '+'.join(duties_set)
@@ -295,7 +295,7 @@ async def daily_schedule_update():
 async def send_curator_notifications():
     # find all volunteers with duties that contain 'kk_admin_curator'
     volunteers = Volunteer.all(fields=['telegram', 'telegram_chat_id', 'duty_codes', 'language'])
-    curators = [volunteer for volunteer in volunteers if 'kk_admin_curator' in volunteer.duty_codes]
+    curators = [volunteer for volunteer in volunteers if 'kk_admin_curator' in volunteer.duties]
 
     # If no curators, exit early
     if not curators:
@@ -467,7 +467,7 @@ async def set_topic_handler(event):
         await event.respond(error_not_registered[user.language])
         return
 
-    if 'kk_admin_curator' not in user.duty_codes:
+    if 'kk_admin_curator' not in user.duties:
         await event.respond(error_not_admin[user.language])
         return
 
@@ -511,11 +511,11 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
 
     language = user.language if user else 'en'
     duties_set = []
-    if 'kk_cleaning' in user.duty_codes:
+    if 'kk_cleaning' in user.duties:
         duties_set.append('cln')
-    if 'kk_medical' in user.duty_codes:
+    if 'kk_medical' in user.duties:
         duties_set.append('med')
-    if 'steril_cat_in_out' in user.duty_codes:
+    if 'steril_cat_in_out' in user.duties:
         duties_set.append('steril_acceptance')
         duties_set.append('steril_release')
 
@@ -524,7 +524,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
     else:
         duties_set = '+'.join(duties_set)
 
-    admin_flag = True if 'kk_admin_curator' in user.duty_codes else False
+    admin_flag = True if 'kk_admin_curator' in user.duties else False
 
     buttons = [
         [Button.inline(button_new_schedule[language], data=f'new_schedule;{duties_set}')],
