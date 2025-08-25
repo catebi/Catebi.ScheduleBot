@@ -343,7 +343,7 @@ button_notifications_settings_text_menu = {
 
 button_notifications_settings_cleaning_text = {
     'en': "📝 Set custom text for cleaning",
-    'ru': "📝 Установить свой текст для уборки" 
+    'ru': "📝 Установить свой текст для уборки"
 }
 
 button_notifications_settings_medical_text = {
@@ -379,7 +379,7 @@ button_notifications_settings_steril_text = {
 button_notifications_send_menu = {
     'en': "📤 Send now menu",
     'ru': "📤 Меню отправки"
-} 
+}
 
 button_curator_notifications_send_all = {
     'en': "📤 Notify all volunteers",
@@ -414,8 +414,8 @@ error_not_registered = {
     'ru': "Вы не зарегистрированный волонтер. Пожалуйста, свяжитесь с администратором."
 }
 
-error_no_roles = {
-    'en': "Oh! Looks like you don't have the necessary roles to use this bot.\nPlease check in with the [volunteer bot](https://t.me/catebi_volunteer_bot) to get started!",
+error_no_duties = {
+    'en': "Oh! Looks like you don't have the necessary duties to use this bot.\nPlease check in with the [volunteer bot](https://t.me/catebi_volunteer_bot) to get started!",
     'ru': "Ой! Похоже, у вас нет необходимых ролей для использования этого бота.\nПожалуйста, отметьтесь в [волонтерском боте](https://t.me/catebi_volunteer_bot), чтобы начать!"
 }
 
