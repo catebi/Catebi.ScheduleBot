@@ -185,16 +185,16 @@ async def update_volunteers(step: str):
 async def send_notifications(curator_id: int, type: str = '', date: datetime = None):
     global steril_notification_message
 
-    # send notifications to all volunteers with roles kk_cleaning
-    volunteers = Volunteer.all(fields=['telegram_chat_id', 'language', 'volunteer_roles'])
+    # send notifications to all volunteers with duties kk_cleaning
+    volunteers = Volunteer.all(fields=['telegram_chat_id', 'language', 'duty_codes'])
     if type == 'cleaning':
-        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.roles]
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.duties]
     elif type == 'medical':
-        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_medical' in volunteer.roles]
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_medical' in volunteer.duties]
     elif type == 'steril':
-        notifiable_volunteers = [volunteer for volunteer in volunteers if 'steril_cat_in_out' in volunteer.roles]
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'steril_cat_in_out' in volunteer.duties]
     else:
-        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.roles or 'kk_medical' in volunteer.roles]
+        notifiable_volunteers = [volunteer for volunteer in volunteers if 'kk_cleaning' in volunteer.duties or 'kk_medical' in volunteer.duties]
 
     if type != 'steril':
         curator = Volunteer.first(formula=match({'telegram_chat_id': curator_id}))
@@ -215,15 +215,15 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
     # iterate over all volunteers and send notifications
     for volunteer in notifiable_volunteers:
         try:
-            roles_set = []
-            if 'kk_cleaning' in volunteer.roles:
-                roles_set.append('cln')
-            if 'kk_medical' in volunteer.roles:
-                roles_set.append('med')
-            if 'steril_cat_in_out' in volunteer.roles:
-                roles_set.append('steril')
+            duties_set = []
+            if 'kk_cleaning' in volunteer.duties:
+                duties_set.append('cln')
+            if 'kk_medical' in volunteer.duties:
+                duties_set.append('med')
+            if 'steril_cat_in_out' in volunteer.duties:
+                duties_set.append('steril')
 
-            roles_set = '+'.join(roles_set)
+            duties_set = '+'.join(duties_set)
 
             if type == 'steril':
                 buttons = [
@@ -233,35 +233,47 @@ async def send_notifications(curator_id: int, type: str = '', date: datetime = N
                 ]
             else:
                 buttons = [
-                    [Button.inline(button_new_schedule[volunteer.language], data=f'new_schedule;{roles_set}')],
+                    [Button.inline(button_new_schedule[volunteer.language], data=f'new_schedule;{duties_set}')],
                 ]
 
             if type == 'steril':
                 start_date = format_date_by_language(date, volunteer.language)
                 end_date = format_date_by_language(date + timedelta(days=1), volunteer.language)
-                steril_notification_message = await bot.send_message(
-                    volunteer.telegram_chat_id,
-                    notifications_steril_message[volunteer.language].format(
-                        start_date, end_date,
-                        start_date,
-                        f"{start_date} и {end_date}" if volunteer.language == 'ru' else f"{start_date} and {end_date}",
-                        end_date
-                    ),
-                    buttons=buttons
-                )
+                try:
+                    steril_notification_message = await bot.send_message(
+                        volunteer.telegram_chat_id,
+                        notifications_steril_message[volunteer.language].format(
+                            start_date, end_date,
+                            start_date,
+                            f"{start_date} и {end_date}" if volunteer.language == 'ru' else f"{start_date} and {end_date}",
+                            end_date
+                        ),
+                        buttons=buttons
+                    )
+                except Exception as err:
+                    logging.error(f"Error sending steril notification to {volunteer.telegram_chat_id}: {err}", exc_info=True)
+                    continue
 
             elif type != 'all':
-                await bot.send_message(
-                    volunteer.telegram_chat_id,
-                        text_cleaning.format(format_date_by_language(date, volunteer.language)) if type == 'cleaning' else text_medical.format(format_date_by_language(date, volunteer.language)),
-                    buttons=buttons
-                )
+                try:
+                    await bot.send_message(
+                        volunteer.telegram_chat_id,
+                            text_cleaning.format(format_date_by_language(date, volunteer.language)) if type == 'cleaning' else text_medical.format(format_date_by_language(date, volunteer.language)),
+                        buttons=buttons
+                    )
+                except Exception as err:
+                    logging.error(f"Error sending '{type}' notification to {volunteer.telegram_chat_id}: {err}", exc_info=True)
+                    continue
             else:
-                await bot.send_message(
-                    volunteer.telegram_chat_id,
-                    text_cleaning.format(format_date_by_language(date, volunteer.language)) + '\n\n' + text_medical.format(format_date_by_language(date, volunteer.language)),
-                    buttons=buttons
-                )
+                try:
+                    await bot.send_message(
+                        volunteer.telegram_chat_id,
+                        text_cleaning.format(format_date_by_language(date, volunteer.language)) + '\n\n' + text_medical.format(format_date_by_language(date, volunteer.language)),
+                        buttons=buttons
+                    )
+                except Exception as err:
+                    logging.error(f"Error sending 'all' notification to {volunteer.telegram_chat_id}: {err}", exc_info=True)
+                    continue
 
             await asyncio.sleep(0.5) # avoid flood limits
             received_notifications_count += 1
@@ -281,9 +293,9 @@ async def daily_schedule_update():
 @aiocron.crontab('0 * * * *') # every hour at minute 0
 @airtable_context('send_curator_notifications')
 async def send_curator_notifications():
-    # find all volunteers with roles that contain 'kk_admin_curator'
-    volunteers = Volunteer.all(fields=['telegram', 'telegram_chat_id', 'volunteer_roles', 'language'])
-    curators = [volunteer for volunteer in volunteers if 'kk_admin_curator' in volunteer.roles]
+    # find all volunteers with duties that contain 'kk_admin_curator'
+    volunteers = Volunteer.all(fields=['telegram', 'telegram_chat_id', 'duty_codes', 'language'])
+    curators = [volunteer for volunteer in volunteers if 'kk_admin_curator' in volunteer.duties]
 
     # If no curators, exit early
     if not curators:
@@ -455,7 +467,7 @@ async def set_topic_handler(event):
         await event.respond(error_not_registered[user.language])
         return
 
-    if 'kk_admin_curator' not in user.roles:
+    if 'kk_admin_curator' not in user.duties:
         await event.respond(error_not_admin[user.language])
         return
 
@@ -498,24 +510,24 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
         return
 
     language = user.language if user else 'en'
-    roles_set = []
-    if 'kk_cleaning' in user.roles:
-        roles_set.append('cln')
-    if 'kk_medical' in user.roles:
-        roles_set.append('med')
-    if 'steril_cat_in_out' in user.roles:
-        roles_set.append('steril_acceptance')
-        roles_set.append('steril_release')
+    duties_set = []
+    if 'kk_cleaning' in user.duties:
+        duties_set.append('cln')
+    if 'kk_medical' in user.duties:
+        duties_set.append('med')
+    if 'steril_cat_in_out' in user.duties:
+        duties_set.append('steril_acceptance')
+        duties_set.append('steril_release')
 
-    if not roles_set:
-        roles_set = 'none'
+    if not duties_set:
+        duties_set = 'none'
     else:
-        roles_set = '+'.join(roles_set)
+        duties_set = '+'.join(duties_set)
 
-    admin_flag = True if 'kk_admin_curator' in user.roles else False
+    admin_flag = True if 'kk_admin_curator' in user.duties else False
 
     buttons = [
-        [Button.inline(button_new_schedule[language], data=f'new_schedule;{roles_set}')],
+        [Button.inline(button_new_schedule[language], data=f'new_schedule;{duties_set}')],
         [Button.inline(button_my_schedule[language], data=f'my_schedule')],
         [Button.inline(button_general_schedule[language], data=f'general_schedule')]
     ]
@@ -552,20 +564,20 @@ async def callback_handler(event):
 
     # New scheduled date
     if data.startswith('new_schedule'):
-        # ask for the type of schedule if role_switch is 3 (both roles are assigned)
+        # ask for the type of schedule if duty_switch is 3 (both duties are assigned)
         if data.split(';')[1] == 'none':
-            await event.edit(error_no_roles[language], buttons=[Button.inline(button_back[language], data='back')])
+            await event.edit(error_no_duties[language], buttons=[Button.inline(button_back[language], data='back')])
             return
         elif len(data.split(';')[1].split('+')) > 1:
             buttons = []
-            roles = data.split(';')[1].split('+')
-            if 'cln' in roles:
+            duties = data.split(';')[1].split('+')
+            if 'cln' in duties:
                 buttons.append([Button.inline(button_type_cleaning[language], data='new_schedule;cleaning')])
-            if 'med' in roles:
+            if 'med' in duties:
                 buttons.append([Button.inline(button_type_medical[language], data='new_schedule;medical')])
-            if 'steril_acceptance' in roles:
+            if 'steril_acceptance' in duties:
                 buttons.append([Button.inline(button_type_steril_acceptance[language], data='new_schedule;steril_acceptance')])
-            if 'steril_release' in roles:
+            if 'steril_release' in duties:
                 buttons.append([Button.inline(button_type_steril_release[language], data='new_schedule;steril_release')])
             buttons.append([Button.inline(button_back[language], data='back')])
             await event.edit(new_schedule_type_prompt[language], buttons=buttons)
@@ -1079,7 +1091,7 @@ async def callback_handler(event):
         # Show loading state while sending notifications
         await show_loading_state(event, language)
 
-        # send notifications to all volunteers with 'steril_cat_in_out' role
+        # send notifications to all volunteers with 'steril_cat_in_out' duty
         all_volunteers_count, received_notifications_count = await send_notifications(event.sender.id, 'steril', start_date)
         await event.edit(
             notifications_send_success[language].format(

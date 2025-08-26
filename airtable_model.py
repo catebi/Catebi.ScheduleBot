@@ -5,7 +5,7 @@ class Volunteer(Model):
     telegram = fields.TextField('telegram', readonly=True)
     telegram_chat_id = fields.NumberField('telegram_chat_id', readonly=True)
     language = fields.SelectField('language')
-    roles = fields.LookupField('volunteer_roles', readonly=True)
+    duties = fields.LookupField('duty_codes', readonly=True)
 
     class Meta:
         memorize = True
