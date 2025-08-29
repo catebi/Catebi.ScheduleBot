@@ -554,9 +554,11 @@ async def schedule_handler(event, language: str = 'en', update: bool = False, vi
 
     buttons = [
         [Button.inline(button_new_schedule[language], data=f'new_schedule;{duties_set}')],
-        [Button.inline(button_my_schedule[language], data=f'my_schedule')],
-        [Button.inline(button_general_schedule[language], data=f'general_schedule')]
+        [Button.inline(button_my_schedule[language], data=f'my_schedule')]
     ]
+
+    if view == 'today':
+        buttons.append([Button.inline(button_general_schedule[language], data=f'general_schedule')]) # only show general schedule button in today view
 
     if admin_flag:
         buttons.append([Button.inline(button_notifications[language], data='notifications;;')])
