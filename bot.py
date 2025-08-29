@@ -420,7 +420,7 @@ async def start_handler(event, check_user: bool = False, language: str = 'en'):
         buttons = [
             [Button.inline(languages[lang], data=f'language:{lang}')] for lang in languages
         ]
-        await event.respond(language_selection['en'], buttons=buttons)
+        await event.edit(language_selection[language], buttons=buttons)
         return
 
     # check if user exists in Airtable
@@ -455,9 +455,34 @@ async def help_handler(event):
 
 @bot.on(events.NewMessage(pattern='/settings', func=lambda e: e.is_private)) # Only in private chat
 @logger
-async def settings_handler(event):
-    # show language selection menu
-    await start_handler(event, check_user=False)
+async def settings_handler(event, edit: bool = False):
+    # read current settings
+    user = Volunteer.first(formula=match({'telegram_chat_id': event.sender.id}))
+    if not user:
+        await event.respond(error_not_registered[user.language])
+        return
+
+    current_settings = {
+        "language": user.language,
+        "view": user.schedule_view
+    }
+
+    buttons = [
+        [Button.inline(button_change_language[current_settings['language']], data='change_language')],
+        [Button.inline(button_change_view[current_settings['language']], data=f'change_view;{current_settings['view']}')]
+    ]
+
+    if not edit:
+        await event.respond(settings_overview[current_settings['language']].format(
+            languages[current_settings['language']],
+            settings_view[current_settings['view']][current_settings['language']]
+        ), buttons=buttons)
+        return
+
+    await event.edit(settings_overview[current_settings['language']].format(
+        languages[current_settings['language']],
+        settings_view[current_settings['view']][current_settings['language']]
+    ), buttons=buttons)
 
 @bot.on(events.NewMessage(pattern='/set_cleaning_topic|/set_medical_topic|/set_steril_cat_topic'))
 @logger
@@ -489,7 +514,7 @@ async def set_topic_handler(event):
 @bot.on(events.NewMessage(pattern='/schedule'))
 @logger
 @airtable_context('schedule_handler')
-async def schedule_handler(event, language: str = 'en', update: bool = False):
+async def schedule_handler(event, language: str = 'en', update: bool = False, view: str = 'today'):
     global today_volunteers_list, dates_list
 
     today = datetime.now().date().strftime('%d.%m')
@@ -510,6 +535,7 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
         return
 
     language = user.language if user else 'en'
+    view = user.schedule_view
     duties_set = []
     if 'kk_cleaning' in user.duties:
         duties_set.append('cln')
@@ -537,10 +563,17 @@ async def schedule_handler(event, language: str = 'en', update: bool = False):
         buttons.append([Button.inline(button_notifications_steril[language], data='notifications_steril;;')])
 
     if update:
-        await event.edit(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(today, ', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
+        await event.edit(
+            main_menu_header[language]+'\n\n'+(
+                todays_volunteers[language].format(today, ', '.join(today_volunteers_list) if today_volunteers_list else '😿')
+            ) if view == 'today' else \
+                general_schedule[language].format(today, ', '.join(today_volunteers_list) if today_volunteers_list else '😿', '\n'.join(dates_list)), buttons=buttons)
         return
 
-    await event.respond(main_menu_header[language]+'\n\n'+todays_volunteers[language].format(today, ', '.join(today_volunteers_list) if today_volunteers_list else '😿'), buttons=buttons)
+    await event.respond(main_menu_header[language]+'\n\n'+(
+        todays_volunteers[language].format(today, ', '.join(today_volunteers_list) if today_volunteers_list else '😿')
+    ) if view == 'today' else \
+        general_schedule[language].format(today, ', '.join(today_volunteers_list) if today_volunteers_list else '😿', '\n'.join(dates_list)), buttons=buttons)
 
 # region Buttons
 @bot.on(events.CallbackQuery())
@@ -1125,6 +1158,43 @@ async def callback_handler(event):
             buttons=buttons
         )
 
+    
+
+    # ----------------------------------------------------
+    # Settings section
+    # ----------------------------------------------------
+    if data == 'change_language':
+        await start_handler(event, check_user=False, language=language)
+
+    if data.startswith('change_view;'):
+        _, view = data.split(';')
+
+        current_view = settings_view[view][language]
+
+        buttons = [
+            [Button.inline(type[language], data=f'change_view_to;{name}') for name, type in settings_view.items()],
+            [Button.inline(button_back[language], data='back_settings')]
+        ]
+
+        await event.edit(
+            settings_view_prompt[language].format(current_view),
+            buttons=buttons
+        )
+
+    if data.startswith('change_view_to;'):
+        _, new_view = data.split(';')
+        user.schedule_view = new_view
+        user.save()
+
+        await event.edit(
+            settings_view_success[language].format(settings_view[new_view][language]),
+            buttons=[
+                [Button.inline(button_back[language], data='back')]
+            ]
+        )
+
+    # Get back
+
     if data == 'back_steril':
         # Go back to the steril notification for choosing another shift type
         await event.edit(
@@ -1133,7 +1203,9 @@ async def callback_handler(event):
             formatting_entities=steril_notification_message.entities
         )
 
-    # Get back
+    if data == 'back_settings':
+        await settings_handler(event, edit=True)
+
     if data == 'back':
         await schedule_handler(event, language, update=True)
 
