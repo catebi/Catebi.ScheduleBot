@@ -16,7 +16,7 @@ help_message = {
 
 Команды бота:
 /schedule - главное меню
-/settings - настройки бота (язык)
+/settings - настройки бота (язык, вид расписания)
 /help - это сообщение
 """,
     'en': """This bot will help you sign up and track your shifts at Catebi.
@@ -30,7 +30,7 @@ The 🏥 emoji in the schedule means that it is a medical shift.
 
 Bot commands:
 /schedule - main menu
-/settings - bot settings (language)
+/settings - bot settings (language, default view)
 /help - this message
 """
 }
@@ -43,6 +43,32 @@ language_selection = {
 languages = {
     'en': "🇺🇸 English",
     'ru': "🇷🇺 Русский"
+}
+
+settings_overview = {
+    'en': "Your current settings are:\n\n__Language:__ {}\n__Default view:__ **{}**",
+    'ru': "Ваши текущие настройки:\n\n__Язык:__ {}\n__Вид расписания:__ **{}**"
+}
+
+settings_view = {
+    'today': {
+        'en': "Today only",
+        'ru': "Только сегодня"
+    },
+    'general': {
+        'en': "General schedule",
+        'ru': "Общее расписание"
+    }
+}
+
+settings_view_prompt = {
+    'en': "Please select the view you want to switch to.\n\n__Today only__ - shows only today's date (default).\n__General schedule__ - shows the full schedule with all dates.\n\nYour current view is: **{}**",
+    'ru': "Пожалуйста, выберите вид, на который хотите переключиться.\n\n__Только сегодня__ - показывает только сегодняшнюю дату (по-умолчанию).\n__Общее расписание__ - показывает полное расписание со всеми датами.\n\nВаш текущий вид: **{}**"
+}
+
+settings_view_success = {
+    'en': "Your view has been successfully changed to: **{}**",
+    'ru': "Ваш вид был успешно изменен на: **{}**"
 }
 
 # Loading messages
@@ -406,7 +432,15 @@ button_curator_ignore = {
     'ru': "🚫 Игнорировать"
 }
 
+button_change_language = {
+    'en': "🌐 Change language",
+    'ru': "🌐 Изменить язык"
+}
 
+button_change_view = {
+    'en': "📆 Change default schedule view",
+    'ru': "📆 Изменить вид расписания по-умолчанию"
+}
 
 # region Error messages
 error_not_registered = {
