@@ -53,6 +53,19 @@ def format_date_by_language(date: datetime, language: str):
     formatted_date = format_date(date, format='dd.MM, EEEE', locale=language) # use generic format for all languages: 31.12, Monday
     return f"{formatted_date.split(' ')[0]} {formatted_date.split(' ')[1].capitalize()}" # capitalize the first letter of the day of the week
 
+# Build a non-wrapping emoji + username label
+WORD_JOINER = '\u2060'
+NBSP = '\u00A0'
+def build_label(date_type: str, username: str):
+    if date_type == 'cleaning':
+        return '🧹' + WORD_JOINER + username
+    if date_type == 'medical':
+        return '🏥' + WORD_JOINER + username
+    if date_type == 'steril_release':
+        return '😸' + WORD_JOINER + '⬆️' + WORD_JOINER + username
+    # steril_acceptance and any other types default to down arrow
+    return '😸' + WORD_JOINER + '⬇️' + WORD_JOINER + username
+
 # Helper function to show loading state and prevent multiple button presses
 async def show_loading_state(event, user_language: str):
     """Show loading message and remove buttons to prevent multiple presses"""
@@ -82,26 +95,23 @@ async def update_volunteers(step: str):
         date.date = date.date.astimezone(datetime.now().astimezone().tzinfo) # convert date to local timezone
         # aggregate volunteers if two are scheduled at the same date
         if date.date.date() == datetime.now().date():
-            today_volunteers_list.append(
-                ('🧹'+date.volunteer.telegram if date.type == 'cleaning'
-                 else '🏥'+date.volunteer.telegram if date.type == 'medical'
-                 else '😸⬆️'+date.volunteer.telegram if date.type == 'steril_release'
-                 else '😸⬇️'+date.volunteer.telegram) + (f' ({date.date.strftime('%H:%M')})') if date.type != 'steril_acceptance' else '')
+            entry = build_label(date.type, date.volunteer.telegram)
+            if date.type != 'steril_acceptance':
+                entry += f"{NBSP}({date.date.strftime('%H:%M')})"
+            today_volunteers_list.append(entry)
             continue
         same_date = [d for d in dates_list if d.startswith(date.date.strftime('%d.%m'))]
         if same_date:
             dates_list.remove(same_date[0])
-            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {same_date[0].split(': ')[1]}, { \
-                '🧹'+date.volunteer.telegram if date.type == 'cleaning' \
-                else '🏥'+date.volunteer.telegram if date.type == 'medical' \
-                else '😸⬆️'+date.volunteer.telegram if date.type == 'steril_release' \
-                else '😸⬇️'+date.volunteer.telegram}" + (f" ({date.date.strftime('%H:%M')})" if date.type != 'steril_acceptance' else ''))
+            new_entry = build_label(date.type, date.volunteer.telegram)
+            if date.type != 'steril_acceptance':
+                new_entry += f"{NBSP}({date.date.strftime('%H:%M')})"
+            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {same_date[0].split(': ')[1]}, {new_entry}")
         else:
-            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: { \
-                '🧹'+date.volunteer.telegram if date.type == 'cleaning' \
-                else '🏥'+date.volunteer.telegram if date.type == 'medical' \
-                else '😸⬆️'+date.volunteer.telegram if date.type == 'steril_release' \
-                else '😸⬇️'+date.volunteer.telegram}" + (f" ({date.date.strftime('%H:%M')})" if date.type != 'steril_acceptance' else ''))
+            entry = build_label(date.type, date.volunteer.telegram)
+            if date.type != 'steril_acceptance':
+                entry += f"{NBSP}({date.date.strftime('%H:%M')})"
+            dates_list.append(f"{date.date.strftime('%d.%m, %A')}: {entry}")
 
     logging.info(f"<{step}> Volunteers list and schedule updated.")
 
