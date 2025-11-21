@@ -405,8 +405,7 @@ async def send_curator_notifications():
 
 # send daily medical topic notification at 11:00
 @logger
-# @aiocron.crontab('0 11 * * *') # every day at 12:0
-@aiocron.crontab('38 13 * * *') # every day at 23:30
+@aiocron.crontab('00 11 * * *') # every day at 11:00
 @airtable_context('daily_medical_notification')
 async def send_daily_medical_notification():
     global topic_input_entity, medical_topic_id
