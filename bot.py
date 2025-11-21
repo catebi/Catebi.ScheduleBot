@@ -15,6 +15,9 @@ from translations import *
 from airtable_model import *
 from airtable_logger import airtable_context  # Import the context manager
 
+# Initialize sterilization base API
+sterilization_api = Api(api_key=airtable_api_key) if airtable_api_key else None
+
 logging.basicConfig(format='[%(levelname)s] %(message)s',
                     level=logging.WARNING)
 
@@ -52,6 +55,29 @@ steril_notification_message = None
 def format_date_by_language(date: datetime, language: str):
     formatted_date = format_date(date, format='dd.MM, EEEE', locale=language) # use generic format for all languages: 31.12, Monday
     return f"{formatted_date.split(' ')[0]} {formatted_date.split(' ')[1].capitalize()}" # capitalize the first letter of the day of the week
+
+# Helper function to parse date from Airtable field
+def parse_airtable_date(date_value):
+    """Parse date from Airtable field (string, datetime, or list) and return date object."""
+    if not date_value:
+        return None
+    
+    # Handle lookup fields which might be arrays
+    if isinstance(date_value, list) and len(date_value) > 0:
+        date_value = date_value[0]
+    
+    # Parse date string if it's a string
+    if isinstance(date_value, str):
+        try:
+            return datetime.strptime(date_value.split('T')[0], '%Y-%m-%d').date()
+        except:
+            return None
+    
+    # If it's already a date object, extract date if needed
+    if hasattr(date_value, 'date'):
+        return date_value.date()
+    
+    return None
 
 # Build a non-wrapping emoji + username label
 WORD_JOINER = '\u2060'
@@ -377,7 +403,192 @@ async def send_curator_notifications():
                     await bot.send_message(curator.telegram_chat_id, text, buttons=buttons)
                     break  # Send only one notification for the closest date and break the loop, delete to notify about all future dates
 
+# send daily medical topic notification at 11:00
+@logger
+# @aiocron.crontab('0 11 * * *') # every day at 12:0
+@aiocron.crontab('38 13 * * *') # every day at 23:30
+@airtable_context('daily_medical_notification')
+async def send_daily_medical_notification():
+    global topic_input_entity, medical_topic_id
+    
+    # Check if topic settings are available
+    settings = Settings.all()
+    settings_dict = {setting.key: setting.value for setting in settings}
+    
+    if not settings_dict.get('topic_chat_id') or not settings_dict.get('medical_topic_id'):
+        logging.error("Topic chat ID or medical topic ID is not set, skipping daily medical notification.")
+        return
+    
+    medical_topic_id = settings_dict.get('medical_topic_id')
+    
+    try:
+        marked_topic_chat_id = int('-100'+str(settings_dict.get('topic_chat_id')))
+        topic_entity = await bot.get_entity(marked_topic_chat_id)
+        topic_input_entity = utils.get_input_channel(utils.get_input_peer(topic_entity))
+    except (ValueError, Exception) as err:
+        logging.error(f"Error getting topic chat entity for daily medical notification: {err}")
+        return
+    
+    if not airtable_sterilization_base_id or not sterilization_api:
+        logging.error("Sterilization base ID or API not configured, skipping daily medical notification.")
+        return
+    
+    try:
+        # Query cat_flat_fostering table from sterilization base
+        table = sterilization_api.table(airtable_sterilization_base_id, 'cat_flat_fostering')
+        
+        # Filter by status - match any of the specified statuses
+        statuses = ["принята в кд", "ожидает стерилизацию", "готова к выписке", "назначен медуход", "в клинике"]
+        status_formulas = [match({'status': status}) for status in statuses]
+        formula = OR(*status_formulas)
 
+        # exclude cats with checked is_test field
+        formula = AND(formula, match({'is_test': False}))
+        
+        # Fetch records with required fields
+        records = table.all(
+            formula=str(formula),
+            fields=['request_id', 'sterilization_date', 'in_date', 'record_id', 'request_record_id',
+                    'status', 'room', '💊 med_care', '🦟is_deflead', '💉is_vaccinated', '𓆑is_dewormed']
+        )
+        
+        # Filter records that need attention (any checkbox unchecked)
+        cats_needing_attention = []
+        today = datetime.now().date()
+        
+        for record in records:
+            fields_data = record.get('fields', {})
+            is_deflead = fields_data.get('🦟is_deflead', False)
+            is_vaccinated = fields_data.get('💉is_vaccinated', False)
+            is_dewormed = fields_data.get('𓆑is_dewormed', False)
+            
+            # Check if any of the three checkboxes is unchecked
+            if not is_deflead or not is_vaccinated or not is_dewormed:
+                # Handle request_id which is a lookup field (might be array or single value)
+                request_id_raw = fields_data.get('request_id')
+                if isinstance(request_id_raw, list) and len(request_id_raw) > 0:
+                    request_id = str(request_id_raw[0])
+                elif request_id_raw is not None:
+                    request_id = str(request_id_raw)
+                else:
+                    request_id = 'N/A'
+                
+                # Get request_record_id for link
+                request_record_id_raw = fields_data.get('request_record_id')
+                if isinstance(request_record_id_raw, list) and len(request_record_id_raw) > 0:
+                    request_record_id = str(request_record_id_raw[0])
+                elif request_record_id_raw is not None:
+                    request_record_id = str(request_record_id_raw)
+                else:
+                    request_record_id = None
+                
+                # Get record_id for link (might be lookup field or direct field)
+                record_id_raw = fields_data.get('record_id')
+                if isinstance(record_id_raw, list) and len(record_id_raw) > 0:
+                    record_id = str(record_id_raw[0])
+                elif record_id_raw is not None:
+                    record_id = str(record_id_raw)
+                else:
+                    record_id = record.get('id')  # fallback to record's own ID
+                
+                # Get room (might be lookup field returning array)
+                room_raw = fields_data.get('room', '')
+                if isinstance(room_raw, list) and len(room_raw) > 0:
+                    room = str(room_raw[0])
+                elif room_raw:
+                    room = str(room_raw)
+                else:
+                    room = ''
+                room_text = f" ({room})" if room else ""
+                
+                # Build emoji string for unchecked fields
+                emojis = []
+                if not is_deflead:
+                    emojis.append('🦟')
+                if not is_vaccinated:
+                    emojis.append('💉')
+                if not is_dewormed:
+                    emojis.append('𓆑')
+                emoji_str = ''.join(emojis)
+                
+                # Add med_care indicator if checked
+                med_care = fields_data.get('💊 med_care', False)
+                if med_care:
+                    emoji_str += '+ 💊'
+                
+                # Calculate days in cat flat
+                in_date_raw = fields_data.get('in_date')
+                sterilization_date_raw = fields_data.get('sterilization_date')
+                
+                # Try in_date first, then sterilization_date
+                date_obj = parse_airtable_date(in_date_raw) or parse_airtable_date(sterilization_date_raw)
+                
+                if date_obj:
+                    days = (today - date_obj).days
+                    days_text = f"{days}дн в кк{room_text}"
+                else:
+                    days_text = f"срок пребывания в кк неизвестен{room_text}"
+                
+                # Format entry with links: {request_id_link} {emojis} {days}, {details_link}
+                # Format request_id as link if request_record_id is available
+                if request_record_id:
+                    request_id_url = f"https://catebi.softr.app/sterilization-request-details?recordId={request_record_id}"
+                    request_id_link = f'<a href="{request_id_url}">{request_id}</a>'
+                else:
+                    request_id_link = request_id
+                
+                # Format details link if record_id is available
+                if record_id:
+                    details_url = f"https://catebi.softr.app/cat-flat-fostering-details?recordId={record_id}"
+                    details_link = f'<a href="{details_url}">link</a>'
+                else:
+                    details_link = 'link'
+                
+                entry = f"{request_id_link} {emoji_str} {days_text}, {details_link}"
+                cats_needing_attention.append(entry)
+        
+        # Get today's medical duty volunteer
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.now().astimezone().tzinfo)
+        today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=datetime.now().astimezone().tzinfo)
+        
+        formula = AND(
+            GTE(Field('date'), today_start),
+            LTE(Field('date'), today_end),
+            match({'type': 'medical'})
+        )
+        
+        today_schedules = Schedule.all(
+            formula=formula,
+            fields=['date', 'telegram', 'type']
+        )
+        
+        duty_info = "❗️на сегодня нет дежурного по медуходу"
+        if today_schedules:
+            # Get the first medical schedule for today
+            schedule = today_schedules[0]
+            schedule_date = schedule.date.astimezone(datetime.now().astimezone().tzinfo)
+            username = schedule.telegram if schedule.telegram else 'unknown'
+            time_str = schedule_date.strftime('%H:%M')
+            duty_info = f"дежурный медухода сегодня {username}, в {time_str}"
+        
+        # Build and send message
+        if cats_needing_attention:
+            message = "⚠️ кошки в котодоме без обработки или на медуход\n\n" + "\n".join(cats_needing_attention) + f"\n\n{duty_info}"
+        else:
+            message = "🎉 все кошки в котодоме обработаны и не нуждаются в медуходе"
+        
+        await bot.send_message(
+            topic_input_entity,
+            message,
+            reply_to=medical_topic_id,
+            parse_mode='html',
+            link_preview=False
+        )
+        
+        logging.info(f"Daily medical notification sent successfully. Cats needing attention: {len(cats_needing_attention)}")
+        
+    except Exception as err:
+        logging.error(f"Error sending daily medical notification: {err}", exc_info=True)
 
 # handle custom notification text setting
 custom_text_setting = {}
