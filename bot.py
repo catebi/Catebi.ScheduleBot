@@ -448,7 +448,7 @@ async def send_daily_medical_notification():
         records = table.all(
             formula=str(formula),
             fields=['request_id', 'sterilization_date', 'in_date', 'record_id', 'request_record_id',
-                    'status', 'room', '💊 med_care', '🦟is_deflead', '💉is_vaccinated', '𓆑is_dewormed']
+                    'status', 'room', '💊 med_care', '🦟is_deflead', '💉is_vaccinated', '𓆑is_dewormed', 'required_vaccination']
         )
 
         # Filter records that need attention (any checkbox unchecked)
@@ -505,7 +505,12 @@ async def send_daily_medical_notification():
                 if not is_deflead:
                     emojis.append('🦟')
                 if not is_vaccinated:
-                    emojis.append('💉')
+                    # required_vaccination field value is 'complex ✔, rabies ❌'
+                    required_vaccination = fields_data.get('required_vaccination', '')
+                    if required_vaccination:
+                        emojis.append('💉' + ('(' + required_vaccination +')'))
+                    else:
+                        emojis.append('💉')
                 if not is_dewormed:
                     emojis.append('𓆑')
                 emoji_str = ''.join(emojis)
@@ -524,7 +529,7 @@ async def send_daily_medical_notification():
 
                 if date_obj:
                     days = (today - date_obj).days
-                    days_text = f"{days}дн в кк{room_text}"
+                    days_text = f"{days} дн в кк{room_text}"
                 else:
                     days_text = f"срок пребывания в кк неизвестен{room_text}"
 
