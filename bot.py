@@ -452,7 +452,8 @@ async def send_daily_medical_notification():
         )
 
         # Filter records that need attention (any checkbox unchecked)
-        cats_needing_attention = []
+        # Group by room: {room: [(request_id_num, entry), ...]}
+        cats_by_room = {}
         today = datetime.now().date()
 
         for record in records:
@@ -460,9 +461,10 @@ async def send_daily_medical_notification():
             is_deflead = fields_data.get('🦟is_deflead', False)
             is_vaccinated = fields_data.get('💉is_vaccinated', False)
             is_dewormed = fields_data.get('𓆑is_dewormed', False)
+            has_med_care = bool(fields_data.get('💊 med_care', False))
 
             # Check if any of the three checkboxes is unchecked
-            if not is_deflead or not is_vaccinated or not is_dewormed:
+            if not is_deflead or not is_vaccinated or not is_dewormed or has_med_care:
                 # Handle request_id which is a lookup field (might be array or single value)
                 request_id_raw = fields_data.get('request_id')
                 if isinstance(request_id_raw, list) and len(request_id_raw) > 0:
@@ -471,6 +473,12 @@ async def send_daily_medical_notification():
                     request_id = str(request_id_raw)
                 else:
                     request_id = 'N/A'
+
+                # Get numeric request_id for sorting
+                try:
+                    request_id_num = int(request_id) if request_id != 'N/A' else 999999
+                except:
+                    request_id_num = 999999
 
                 # Get request_record_id for link
                 request_record_id_raw = fields_data.get('request_record_id')
@@ -497,11 +505,12 @@ async def send_daily_medical_notification():
                 elif room_raw:
                     room = str(room_raw)
                 else:
-                    room = ''
-                room_text = f" ({room})" if room else ""
+                    room = 'Без комнаты'  # Default room name if empty
 
                 # Build emoji string for unchecked fields
                 emojis = []
+                if has_med_care:
+                    emojis.append('💊')
                 if not is_deflead:
                     emojis.append('🦟')
                 if not is_vaccinated:
@@ -515,11 +524,6 @@ async def send_daily_medical_notification():
                     emojis.append('𓆑')
                 emoji_str = ''.join(emojis)
 
-                # Add med_care indicator if checked
-                med_care = fields_data.get('💊 med_care', False)
-                if med_care:
-                    emoji_str += '+ 💊'
-
                 # Calculate days in cat flat
                 in_date_raw = fields_data.get('in_date')
                 sterilization_date_raw = fields_data.get('sterilization_date')
@@ -529,9 +533,9 @@ async def send_daily_medical_notification():
 
                 if date_obj:
                     days = (today - date_obj).days
-                    days_text = f"{days} дн в кк{room_text}"
+                    days_text = f"{days} дн в кк"
                 else:
-                    days_text = f"срок пребывания в кк неизвестен{room_text}"
+                    days_text = f"срок пребывания в кк неизвестен"
 
                 # Format entry with links: {request_id_link} {emojis} {days}, {details_link}
                 # Format request_id as link if request_record_id is available
@@ -544,11 +548,26 @@ async def send_daily_medical_notification():
                 # Format details link if record_id is available
                 if record_id:
                     details_url = f"https://catebi.softr.app/cat-flat-fostering-details?recordId={record_id}"
-                    details_link = f'<a href="{details_url}">link</a>'
+                    details_link = f'<a href="{details_url}">kk_link</a>'
                 else:
-                    details_link = 'link'
+                    details_link = 'kk_link'
 
                 entry = f"{request_id_link} {emoji_str} {days_text}, {details_link}"
+                
+                # Group by room
+                if room not in cats_by_room:
+                    cats_by_room[room] = []
+                cats_by_room[room].append((request_id_num, entry))
+
+        # Sort rooms alphabetically (descending) and entries within each room by request_id (descending)
+        sorted_rooms = sorted(cats_by_room.keys(), reverse=True)
+        cats_needing_attention = []
+        for room in sorted_rooms:
+            # Add room header
+            cats_needing_attention.append(f"<u>{room}</u>")
+            # Sort entries by request_id_num (descending) and add them
+            sorted_entries = sorted(cats_by_room[room], key=lambda x: x[0], reverse=True)
+            for _, entry in sorted_entries:
                 cats_needing_attention.append(entry)
 
         # Get today's medical duty volunteer
