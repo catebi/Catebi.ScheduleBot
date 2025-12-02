@@ -529,7 +529,7 @@ async def send_daily_medical_notification():
                 sterilization_date_raw = fields_data.get('sterilization_date')
 
                 # Try in_date first, then sterilization_date
-                date_obj = parse_airtable_date(in_date_raw) or parse_airtable_date(sterilization_date_raw)
+                date_obj = parse_airtable_date(sterilization_date_raw) or parse_airtable_date(in_date_raw)
 
                 if date_obj:
                     days = (today - date_obj).days
