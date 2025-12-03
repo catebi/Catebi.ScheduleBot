@@ -569,6 +569,7 @@ async def send_daily_medical_notification():
             sorted_entries = sorted(cats_by_room[room], key=lambda x: x[0], reverse=True)
             for _, entry in sorted_entries:
                 cats_needing_attention.append(entry)
+            cats_needing_attention.append('\n')
 
         # Get today's medical duty volunteer
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.now().astimezone().tzinfo)
