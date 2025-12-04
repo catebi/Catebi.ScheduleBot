@@ -562,14 +562,17 @@ async def send_daily_medical_notification():
         # Sort rooms alphabetically (descending) and entries within each room by request_id (descending)
         sorted_rooms = sorted(cats_by_room.keys(), reverse=True)
         cats_needing_attention = []
-        for room in sorted_rooms:
+        for i, room in enumerate(sorted_rooms):
             # Add room header
             cats_needing_attention.append(f"<u>{room}</u>")
             # Sort entries by request_id_num (descending) and add them
             sorted_entries = sorted(cats_by_room[room], key=lambda x: x[0], reverse=True)
             for _, entry in sorted_entries:
                 cats_needing_attention.append(entry)
-            cats_needing_attention.append('\n')
+            
+            # Add newline between rooms (but not after the last room)
+            if i < len(sorted_rooms) - 1:
+                cats_needing_attention.append('')
 
         # Get today's medical duty volunteer
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.now().astimezone().tzinfo)
@@ -597,7 +600,7 @@ async def send_daily_medical_notification():
 
         # Build and send message
         if cats_needing_attention:
-            message = "⚠️ кошки в котодоме без обработки или на медуход\n\n" + "\n".join(cats_needing_attention) + f"\n\n{duty_info}"
+            message = "⚠️ кошки в котодоме без обработки или на медуход\n\n" + "\n".join(cats_needing_attention) + f"\n{duty_info}"
         else:
             message = "🎉 все кошки в котодоме обработаны и не нуждаются в медуходе"
 
