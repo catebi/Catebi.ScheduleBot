@@ -2,6 +2,7 @@ from telethon import TelegramClient, events, Button, utils, functions, types, er
 
 import logging
 import os, time
+import json
 from pyairtable import Api
 from pyairtable.formulas import match, OR, AND, GTE, LTE, Field
 from datetime import datetime, timedelta
@@ -533,9 +534,9 @@ async def send_daily_medical_notification():
 
                 if date_obj:
                     days = (today - date_obj).days
-                    days_text = f"{days} дн в кк"
+                    days_text = f"{days} дн в кд"
                 else:
-                    days_text = f"срок пребывания в кк неизвестен"
+                    days_text = f"срок пребывания в кд неизвестен"
 
                 # Format entry with links: {request_id_link} {emojis} {days}, {details_link}
                 # Format request_id as link if request_record_id is available
@@ -600,7 +601,7 @@ async def send_daily_medical_notification():
 
         # Build and send message
         if cats_needing_attention:
-            message = "⚠️ кошки в котодоме без обработки или на медуход\n\n" + "\n".join(cats_needing_attention) + f"\n{duty_info}"
+            message = "⚠️ кошки в котодоме без обработки или на медуход\n\n" + "\n".join(cats_needing_attention) + f"\n\n{duty_info}"
         else:
             message = "🎉 все кошки в котодоме обработаны и не нуждаются в медуходе"
 
@@ -616,6 +617,501 @@ async def send_daily_medical_notification():
 
     except Exception as err:
         logging.error(f"Error sending daily medical notification: {err}", exc_info=True)
+
+# Helper function to fetch and normalize cat flat records
+@airtable_context('fetch_cat_flat_records')
+async def fetch_cat_flat_records():
+    """Fetch cat flat records and return normalized data for each cat."""
+    if not airtable_sterilization_base_id or not sterilization_api:
+        logging.error("Sterilization base ID or API not configured.")
+        return []
+
+    try:
+        # Query cat_flat_fostering table from sterilization base
+        table = sterilization_api.table(airtable_sterilization_base_id, 'cat_flat_fostering')
+
+        # Filter by status - match any of the specified statuses
+        statuses = ["принята в кд", "ожидает стерилизацию", "готова к выписке", "назначен медуход", "в клинике"]
+        status_formulas = [match({'status': status}) for status in statuses]
+        formula = OR(*status_formulas)
+
+        # exclude cats with checked is_test field
+        formula = AND(formula, match({'is_test': False}))
+
+        # Fetch records with required fields
+        records = table.all(
+            formula=str(formula),
+            fields=['request_id', 'sterilization_date', 'in_date', 'record_id', 'request_record_id',
+                    'status', 'room', '💊 med_care', '🦟is_deflead', '💉is_vaccinated', '𓆑is_dewormed', 'required_vaccination']
+        )
+
+        normalized_cats = []
+        for record in records:
+            fields_data = record.get('fields', {})
+            
+            # Get record_id (use record's own ID as fallback)
+            record_id_raw = fields_data.get('record_id')
+            if isinstance(record_id_raw, list) and len(record_id_raw) > 0:
+                record_id = str(record_id_raw[0])
+            elif record_id_raw is not None:
+                record_id = str(record_id_raw)
+            else:
+                record_id = record.get('id')  # fallback to record's own ID
+
+            # Get status
+            status = fields_data.get('status', '')
+
+            # Get medical fields
+            is_deflead = fields_data.get('🦟is_deflead', False)
+            is_vaccinated = fields_data.get('💉is_vaccinated', False)
+            is_dewormed = fields_data.get('𓆑is_dewormed', False)
+
+            # Handle request_id
+            request_id_raw = fields_data.get('request_id')
+            if isinstance(request_id_raw, list) and len(request_id_raw) > 0:
+                request_id = str(request_id_raw[0])
+            elif request_id_raw is not None:
+                request_id = str(request_id_raw)
+            else:
+                request_id = 'N/A'
+
+            # Get request_record_id for link
+            request_record_id_raw = fields_data.get('request_record_id')
+            if isinstance(request_record_id_raw, list) and len(request_record_id_raw) > 0:
+                request_record_id = str(request_record_id_raw[0])
+            elif request_record_id_raw is not None:
+                request_record_id = str(request_record_id_raw)
+            else:
+                request_record_id = None
+
+            # Get room
+            room_raw = fields_data.get('room', '')
+            if isinstance(room_raw, list) and len(room_raw) > 0:
+                room = str(room_raw[0])
+            elif room_raw:
+                room = str(room_raw)
+            else:
+                room = 'Без комнаты'
+
+            normalized_cats.append({
+                'record_id': record_id,
+                'status': status,
+                'is_deflead': is_deflead,
+                'is_vaccinated': is_vaccinated,
+                'is_dewormed': is_dewormed,
+                'request_id': request_id,
+                'request_record_id': request_record_id,
+                'room': room,
+                'record': record,  # Keep full record for formatting
+                'fields_data': fields_data  # Keep fields_data for formatting
+            })
+
+        return normalized_cats
+    except Exception as err:
+        logging.error(f"Error fetching cat flat records: {err}", exc_info=True)
+        return []
+
+# send daily cat flat status notification at 10:00
+@logger
+@aiocron.crontab('00 10 * * *') # every day at 10:00
+@airtable_context('daily_cat_flat_status_notification')
+async def send_daily_cat_flat_status_notification():
+    global topic_input_entity, process_notification_topic_id
+
+    # Check if topic settings are available
+    settings = Settings.all()
+    settings_dict = {setting.key: setting.value for setting in settings}
+
+    if not settings_dict.get('process_notification_topic_id'):
+        logging.error("Process notification topic ID is not set, skipping daily cat flat status notification.")
+        return
+
+    process_notification_topic_id = settings_dict.get('process_notification_topic_id')
+
+    try:
+        marked_topic_chat_id = int('-100'+str(settings_dict.get('topic_chat_id')))
+        topic_entity = await bot.get_entity(marked_topic_chat_id)
+        topic_input_entity = utils.get_input_channel(utils.get_input_peer(topic_entity))
+    except (ValueError, Exception) as err:
+        logging.error(f"Error getting topic chat entity for daily cat flat status notification: {err}")
+        return
+
+    try:
+        # Fetch normalized cat records
+        normalized_cats = await fetch_cat_flat_records()
+        
+        if not normalized_cats:
+            logging.warning("No cat records found for status notification.")
+            return
+
+        # Process ALL records (no filtering)
+        # Group by room: {room: [(date_obj, days, entry), ...]}
+        cats_by_room = {}
+        today = datetime.now().date()
+        
+        # Prepare state data for saving to JSON
+        state_data = {
+            'timestamp': datetime.now().isoformat(),
+            'cats': {}
+        }
+
+        for cat_data in normalized_cats:
+            fields_data = cat_data['fields_data']
+            record = cat_data['record']
+            is_deflead = cat_data['is_deflead']
+            is_vaccinated = cat_data['is_vaccinated']
+            is_dewormed = cat_data['is_dewormed']
+            has_med_care = bool(fields_data.get('💊 med_care', False))
+            request_id = cat_data['request_id']
+            request_record_id = cat_data['request_record_id']
+            record_id = cat_data['record_id']
+            room = cat_data['room']
+            status = cat_data['status']
+
+            # Save state data for JSON
+            state_data['cats'][record_id] = {
+                'record_id': record_id,
+                'status': status,
+                'is_deflead': is_deflead,
+                'is_vaccinated': is_vaccinated,
+                'is_dewormed': is_dewormed,
+                'request_id': request_id,
+                'request_record_id': request_record_id,
+                'room': room
+            }
+
+            # Build emoji string for unchecked fields (for display in middle)
+            emojis = []
+            if not is_deflead:
+                emojis.append('🦟')
+            if not is_vaccinated:
+                # required_vaccination field value is 'complex ✔, rabies ❌'
+                required_vaccination = fields_data.get('required_vaccination', '')
+                if required_vaccination:
+                    emojis.append('💉' + ('(' + required_vaccination +')'))
+                else:
+                    emojis.append('💉')
+            if not is_dewormed:
+                emojis.append('𓆑')
+            emoji_str = ''.join(emojis)
+            
+            # Track end emojis separately
+            end_emojis = []
+            if has_med_care:
+                end_emojis.append('💊')
+            if not is_deflead or not is_vaccinated or not is_dewormed:
+                end_emojis.append('💉')
+            end_emoji_str = ''.join(end_emojis)
+
+            # Calculate days in cat flat
+            in_date_raw = fields_data.get('in_date')
+            sterilization_date_raw = fields_data.get('sterilization_date')
+
+            # Try sterilization_date first, then in_date
+            date_obj = parse_airtable_date(sterilization_date_raw) or parse_airtable_date(in_date_raw)
+
+            if date_obj:
+                days = (today - date_obj).days
+                days_prefix = f"{days} дн в "
+            else:
+                days = 999999  # Use large number for sorting if date is unknown
+                days_prefix = "срок пребывания в "
+
+            # Determine emoji based on days count
+            if days < 7:
+                status_emoji = '🟢'
+            elif days < 30:
+                status_emoji = '🟡'
+            else:
+                status_emoji = '🔴'
+
+            # Format entry with links: {status_emoji} {request_id_link} {emojis} {days}, {details_link}
+            # Format request_id as link if request_record_id is available
+            if request_record_id:
+                request_id_url = f"https://catebi.softr.app/sterilization-request-details?recordId={request_record_id}"
+                request_id_link = f'<a href="{request_id_url}">{request_id}</a>'
+            else:
+                request_id_link = request_id
+
+            # Format details link if record_id is available - use "кд" as link text
+            if record_id:
+                details_url = f"https://catebi.softr.app/cat-flat-fostering-details?recordId={record_id}"
+                kk_link = f'<a href="{details_url}">кд</a>'
+            else:
+                kk_link = 'кд'
+
+            # Format: {status_emoji} {request_id} {status}, {days_prefix}{kk_link} {end_emojis}
+            # Request ID is plain text (no link), status text added, "кд" is a link
+            entry = f"{status_emoji} {request_id} {status}, {days_prefix}{kk_link}{' ' + end_emoji_str if end_emoji_str else ''}"
+            
+            # Group by room, storing date_obj and days for sorting
+            # Use max date for records without dates so they sort to the end
+            if room not in cats_by_room:
+                cats_by_room[room] = []
+            cats_by_room[room].append((date_obj if date_obj else datetime.max.date(), days, entry))
+
+        # Sort rooms alphabetically (ascending) and entries within each room by date (ascending - older first)
+        sorted_rooms = sorted(cats_by_room.keys(), reverse=False)
+        all_cats = []
+        total_cats_count = 0
+        for i, room in enumerate(sorted_rooms):
+            # Add room header
+            all_cats.append(f"<u>{room}</u>")
+            # Sort entries by date_obj (ascending - older first), then by days (ascending)
+            sorted_entries = sorted(cats_by_room[room], key=lambda x: (x[0], x[1]))
+            for _, _, entry in sorted_entries:
+                all_cats.append(entry)
+                total_cats_count += 1
+            
+            # Add newline between rooms (but not after the last room)
+            if i < len(sorted_rooms) - 1:
+                all_cats.append('')
+
+        # Build and send message with cat count
+        if all_cats:
+            message = f"📋 {total_cats_count} кошек в котодоме\n\n" + "\n".join(all_cats)
+        else:
+            message = "📋 нет кошек в котодоме"
+
+        await bot.send_message(
+            topic_input_entity,
+            message,
+            reply_to=process_notification_topic_id,
+            parse_mode='html',
+            link_preview=False
+        )
+
+        # Save state to JSON file for comparison in changes notification
+        try:
+            state_file_path = os.path.join(os.path.dirname(__file__), 'cat_flat_state.json')
+            with open(state_file_path, 'w', encoding='utf-8') as f:
+                json.dump(state_data, f, ensure_ascii=False, indent=2)
+            logging.info(f"Cat flat state saved to {state_file_path}. Total cats: {len(state_data['cats'])}")
+        except Exception as save_err:
+            logging.error(f"Error saving cat flat state to JSON: {save_err}", exc_info=True)
+
+        logging.info(f"Daily cat flat status notification sent successfully. Total cats: {len([c for c in all_cats if not c.startswith('<u>') and c])}")
+
+    except Exception as err:
+        logging.error(f"Error sending daily cat flat status notification: {err}", exc_info=True)
+
+# Helper function to format cat entry with links
+def format_cat_entry(cat_data):
+    """Format a cat entry with links for display."""
+    request_id = cat_data['request_id']
+    request_record_id = cat_data['request_record_id']
+    record_id = cat_data['record_id']
+    
+    # Format request_id as link if request_record_id is available
+    if request_record_id:
+        request_id_url = f"https://catebi.softr.app/sterilization-request-details?recordId={request_record_id}"
+        request_id_link = f'<a href="{request_id_url}">{request_id}</a>'
+    else:
+        request_id_link = request_id
+
+    # Format details link if record_id is available
+    if record_id:
+        details_url = f"https://catebi.softr.app/cat-flat-fostering-details?recordId={record_id}"
+        details_link = f'<a href="{details_url}">kk_link</a>'
+    else:
+        details_link = 'kk_link'
+
+    return f"{request_id_link}, {details_link}"
+
+# send daily cat flat changes notification at 22:00
+@logger
+@aiocron.crontab('00 22 * * *') # every day at 22:00 (10 PM)
+@airtable_context('daily_cat_flat_changes_notification')
+async def send_daily_cat_flat_changes_notification():
+    global topic_input_entity, process_notification_topic_id
+
+    # Check if topic settings are available
+    settings = Settings.all()
+    settings_dict = {setting.key: setting.value for setting in settings}
+
+    if not settings_dict.get('process_notification_topic_id'):
+        logging.error("Process notification topic ID is not set, skipping daily cat flat changes notification.")
+        return
+
+    process_notification_topic_id = settings_dict.get('process_notification_topic_id')
+
+    try:
+        marked_topic_chat_id = int('-100'+str(process_notification_topic_id))
+        topic_entity = await bot.get_entity(marked_topic_chat_id)
+        topic_input_entity = utils.get_input_channel(utils.get_input_peer(topic_entity))
+    except (ValueError, Exception) as err:
+        logging.error(f"Error getting topic chat entity for daily cat flat changes notification: {err}")
+        return
+
+    try:
+        # Load previous state from JSON
+        state_file_path = os.path.join(os.path.dirname(__file__), 'cat_flat_state.json')
+        try:
+            with open(state_file_path, 'r', encoding='utf-8') as f:
+                prev_state = json.load(f)
+            prev_cats = prev_state.get('cats', {})
+            prev_timestamp = prev_state.get('timestamp', 'unknown')
+            logging.info(f"Loaded previous state from {prev_timestamp}. Total cats: {len(prev_cats)}")
+        except FileNotFoundError:
+            logging.warning(f"Previous state file not found at {state_file_path}. This may be the first run.")
+            await bot.send_message(
+                topic_input_entity,
+                "ℹ️ Изменения не могут быть определены: предыдущее состояние не найдено. Это может быть первый запуск.",
+                reply_to=process_notification_topic_id,
+                parse_mode='html',
+                link_preview=False
+            )
+            return
+        except json.JSONDecodeError as json_err:
+            logging.error(f"Error parsing previous state JSON: {json_err}")
+            await bot.send_message(
+                topic_input_entity,
+                "❌ Ошибка при чтении предыдущего состояния. Проверьте файл cat_flat_state.json.",
+                reply_to=process_notification_topic_id,
+                parse_mode='html',
+                link_preview=False
+            )
+            return
+
+        # Fetch current state
+        current_normalized_cats = await fetch_cat_flat_records()
+        if not current_normalized_cats:
+            logging.warning("No current cat records found for changes notification.")
+            return
+
+        # Build current state dict
+        current_cats = {}
+        for cat_data in current_normalized_cats:
+            record_id = cat_data['record_id']
+            current_cats[record_id] = {
+                'record_id': record_id,
+                'status': cat_data['status'],
+                'is_deflead': cat_data['is_deflead'],
+                'is_vaccinated': cat_data['is_vaccinated'],
+                'is_dewormed': cat_data['is_dewormed'],
+                'request_id': cat_data['request_id'],
+                'request_record_id': cat_data['request_record_id'],
+                'room': cat_data['room'],
+                'cat_data': cat_data  # Keep full data for formatting
+            }
+
+        # Compare and categorize changes
+        new_cats = []  # In current, not in previous
+        departed_cats = []  # In previous, not in current
+        status_changes = {}  # {('prev_status', 'new_status'): [cat_entries]}
+        medical_changes = []  # Cats with medical field changes
+
+        # Find new cats
+        for record_id, cat_data in current_cats.items():
+            if record_id not in prev_cats:
+                new_cats.append(cat_data)
+
+        # Find departed cats and check for changes
+        for record_id, prev_cat in prev_cats.items():
+            if record_id not in current_cats:
+                departed_cats.append(prev_cat)
+            else:
+                curr_cat = current_cats[record_id]
+                
+                # Check status change
+                if prev_cat['status'] != curr_cat['status']:
+                    status_key = (prev_cat['status'], curr_cat['status'])
+                    if status_key not in status_changes:
+                        status_changes[status_key] = []
+                    status_changes[status_key].append(curr_cat)
+                
+                # Check medical field changes
+                medical_changed = False
+                medical_changes_list = []
+                if prev_cat['is_deflead'] != curr_cat['is_deflead']:
+                    medical_changed = True
+                    medical_changes_list.append("🦟☑️")
+                if prev_cat['is_vaccinated'] != curr_cat['is_vaccinated']:
+                    medical_changed = True
+                    medical_changes_list.append("💉☑️")
+                if prev_cat['is_dewormed'] != curr_cat['is_dewormed']:
+                    medical_changed = True
+                    medical_changes_list.append("𓆑☑️")
+                
+                if medical_changed:
+                    medical_changes.append({
+                        'cat': curr_cat,
+                        'changes': medical_changes_list
+                    })
+
+        # Build message
+        message_parts = []
+        
+        # New cats
+        if new_cats:
+            message_parts.append("<b>появились в котоквартире:</b>")
+            for cat_data in new_cats:
+                entry = format_cat_entry(cat_data)
+                message_parts.append(entry)
+            message_parts.append("")
+
+        # Departed cats
+        if departed_cats:
+            message_parts.append("<b>выехали из котоквартиры:</b>")
+            for prev_cat in departed_cats:
+                # Format entry for departed cat (use prev data)
+                request_id = prev_cat['request_id']
+                request_record_id = prev_cat.get('request_record_id')
+                record_id = prev_cat['record_id']
+                
+                if request_record_id:
+                    request_id_url = f"https://catebi.softr.app/sterilization-request-details?recordId={request_record_id}"
+                    request_id_link = f'<a href="{request_id_url}">{request_id}</a>'
+                else:
+                    request_id_link = request_id
+
+                if record_id:
+                    details_url = f"https://catebi.softr.app/cat-flat-fostering-details?recordId={record_id}"
+                    details_link = f'<a href="{details_url}">kk_link</a>'
+                else:
+                    details_link = 'kk_link'
+
+                message_parts.append(f"{request_id_link}, {details_link}")
+            message_parts.append("")
+
+        # Status changes
+        if status_changes:
+            message_parts.append("<b>изменения статуса:</b>")
+            for (prev_status, new_status), cats in status_changes.items():
+                message_parts.append(f"{prev_status} -> {new_status}:")
+                for cat_data in cats:
+                    entry = format_cat_entry(cat_data)
+                    message_parts.append(entry)
+            message_parts.append("")
+
+        # Medical changes
+        if medical_changes:
+            message_parts.append("<b>изменения обработки:</b>")
+            for med_change in medical_changes:
+                cat_data = med_change['cat']
+                entry = format_cat_entry(cat_data)
+                changes_str = " ".join(med_change['changes'])
+                message_parts.append(f"{entry} {changes_str}")
+            message_parts.append("")
+
+        # Send message
+        if message_parts:
+            message = "📊 изменения в котоквартире\n\n" + "\n".join(message_parts).strip()
+        else:
+            message = "✅ изменений не обнаружено"
+
+        await bot.send_message(
+            topic_input_entity,
+            message,
+            reply_to=process_notification_topic_id,
+            parse_mode='html',
+            link_preview=False
+        )
+
+        logging.info(f"Daily cat flat changes notification sent successfully. New: {len(new_cats)}, Departed: {len(departed_cats)}, Status changes: {len(status_changes)}, Medical changes: {len(medical_changes)}")
+
+    except Exception as err:
+        logging.error(f"Error sending daily cat flat changes notification: {err}", exc_info=True)
 
 # handle custom notification text setting
 custom_text_setting = {}
