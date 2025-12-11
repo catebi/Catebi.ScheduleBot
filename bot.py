@@ -641,7 +641,7 @@ async def fetch_cat_flat_records():
         # Fetch records with required fields
         records = table.all(
             formula=str(formula),
-            fields=['request_id', 'sterilization_date', 'in_date', 'record_id', 'request_record_id',
+            fields=['request_id', 'sterilization_date', 'in_date', 'record_id', 'request_record_id', 'notes_kk',
                     'status', 'room', '💊 med_care', '🦟is_deflead', '💉is_vaccinated', '𓆑is_dewormed', 'required_vaccination']
         )
 
@@ -767,6 +767,7 @@ async def send_daily_cat_flat_status_notification():
             record_id = cat_data['record_id']
             room = cat_data['room']
             status = cat_data['status']
+            notes_kk = cat_data['notes_kk']
 
             # Save state data for JSON
             state_data['cats'][record_id] = {
@@ -777,7 +778,8 @@ async def send_daily_cat_flat_status_notification():
                 'is_dewormed': is_dewormed,
                 'request_id': request_id,
                 'request_record_id': request_record_id,
-                'room': room
+                'room': room,
+                'notes_kk': notes_kk
             }
 
             # Build emoji string for unchecked fields (for display in middle)
@@ -843,6 +845,13 @@ async def send_daily_cat_flat_status_notification():
             # Format: {status_emoji} {request_id} {status}, {days_prefix}{kk_link} {end_emojis}
             # Request ID is plain text (no link), status text added, "кд" is a link
             entry = f"{status_emoji} {request_id} {status}, {days_prefix}{kk_link}{' ' + end_emoji_str if end_emoji_str else ''}"
+
+            # trim notes_kk 
+            notes_kk = notes_kk.strip() if notes_kk else ''
+
+            # add notes_kk if it exists to the end of the entry            
+            if notes_kk:
+                entry += f" ({notes_kk})"
             
             # Group by room, storing date_obj and days for sorting
             # Use max date for records without dates so they sort to the end
