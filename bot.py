@@ -641,7 +641,7 @@ async def fetch_cat_flat_records():
         # Fetch records with required fields
         records = table.all(
             formula=str(formula),
-            fields=['request_id', 'sterilization_date', 'in_date', 'record_id', 'request_record_id', 'notes_kk',
+            fields=['request_id', 'sterilization_date', 'in_date', 'record_id', 'request_record_id', 'notes_kk', 'requestor_name',
                     'status', 'room', '💊 med_care', '🦟is_deflead', '💉is_vaccinated', '𓆑is_dewormed', 'required_vaccination']
         )
 
@@ -693,6 +693,24 @@ async def fetch_cat_flat_records():
             else:
                 room = 'Без комнаты'
 
+            # Get notes_kk
+            notes_kk_raw = fields_data.get('notes_kk', '')
+            if isinstance(notes_kk_raw, list) and len(notes_kk_raw) > 0:
+                notes_kk = str(notes_kk_raw[0])
+            elif notes_kk_raw:
+                notes_kk = str(notes_kk_raw)
+            else:
+                notes_kk = ''
+
+            # Get requestor_name (lookup field)
+            requestor_name_raw = fields_data.get('requestor_name', '')
+            if isinstance(requestor_name_raw, list) and len(requestor_name_raw) > 0:
+                requestor_name = str(requestor_name_raw[0])
+            elif requestor_name_raw:
+                requestor_name = str(requestor_name_raw)
+            else:
+                requestor_name = ''
+
             normalized_cats.append({
                 'record_id': record_id,
                 'status': status,
@@ -702,6 +720,8 @@ async def fetch_cat_flat_records():
                 'request_id': request_id,
                 'request_record_id': request_record_id,
                 'room': room,
+                'notes_kk': notes_kk,
+                'requestor_name': requestor_name,
                 'record': record,  # Keep full record for formatting
                 'fields_data': fields_data  # Keep fields_data for formatting
             })
@@ -767,7 +787,8 @@ async def send_daily_cat_flat_status_notification():
             record_id = cat_data['record_id']
             room = cat_data['room']
             status = cat_data['status']
-            notes_kk = cat_data['notes_kk']
+            notes_kk = cat_data.get('notes_kk', '')
+            requestor_name = cat_data.get('requestor_name', '')
 
             # Save state data for JSON
             state_data['cats'][record_id] = {
@@ -842,9 +863,9 @@ async def send_daily_cat_flat_status_notification():
             else:
                 kk_link = 'кд'
 
-            # Format: {status_emoji} {request_id} {status}, {days_prefix}{kk_link} {end_emojis}
-            # Request ID is plain text (no link), status text added, "кд" is a link
-            entry = f"{status_emoji} {request_id} {status}, {days_prefix}{kk_link}{' ' + end_emoji_str if end_emoji_str else ''}"
+            # Format: {status_emoji} {request_id_link} (requestor_name), <i>status</i>, {days_prefix}{kk_link} {end_emojis}
+            requestor_part = f" ({requestor_name})" if requestor_name else ""
+            entry = f"{status_emoji} {request_id_link}{requestor_part}, <i>{status}</i>, {days_prefix}{kk_link}{' ' + end_emoji_str if end_emoji_str else ''}"
 
             # trim notes_kk 
             notes_kk = notes_kk.strip() if notes_kk else ''
