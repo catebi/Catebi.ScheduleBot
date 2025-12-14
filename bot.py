@@ -438,7 +438,7 @@ async def send_daily_medical_notification():
         table = sterilization_api.table(airtable_sterilization_base_id, 'cat_flat_fostering')
 
         # Filter by status - match any of the specified statuses
-        statuses = ["принята в кд", "ожидает стерилизацию", "готова к выписке", "назначен медуход", "в клинике"]
+        statuses = ["принята в кд", "ожидает стерилизацию", "готова к выписке", "назначен медуход"]
         status_formulas = [match({'status': status}) for status in statuses]
         formula = OR(*status_formulas)
 
@@ -631,7 +631,7 @@ async def fetch_cat_flat_records():
         table = sterilization_api.table(airtable_sterilization_base_id, 'cat_flat_fostering')
 
         # Filter by status - match any of the specified statuses
-        statuses = ["принята в кд", "ожидает стерилизацию", "готова к выписке", "назначен медуход", "в клинике"]
+        statuses = ["принята в кд", "ожидает стерилизацию", "готова к выписке", "назначен медуход"]
         status_formulas = [match({'status': status}) for status in statuses]
         formula = OR(*status_formulas)
 
@@ -880,28 +880,50 @@ async def send_daily_cat_flat_status_notification():
                 cats_by_room[room] = []
             cats_by_room[room].append((date_obj if date_obj else datetime.max.date(), days, entry))
 
+        # Room capacities
+        room_capacities = {
+            'K1': 10,
+            'K2': 10,
+            'Hall': 4
+        }
+        total_capacity = sum(room_capacities.values())  # 24
+
         # Sort rooms alphabetically (ascending) and entries within each room by date (ascending - older first)
         sorted_rooms = sorted(cats_by_room.keys(), reverse=False)
         all_cats = []
         total_cats_count = 0
         for i, room in enumerate(sorted_rooms):
+            room_count = len(cats_by_room[room])
+            total_cats_count += room_count
+            
+            # Calculate room percentage
+            room_capacity = room_capacities.get(room, 0)
+            if room_capacity > 0:
+                room_percent = int((room_count / room_capacity) * 100)
+                room_header = f"<u>{room}</u> (🪫{room_count}/{room_capacity}, {room_percent}%)"
+            else:
+                # Room not in capacity list (e.g., "Без комнаты")
+                room_header = f"<u>{room}</u> ({room_count})"
+            
             # Add room header
-            all_cats.append(f"<u>{room}</u>")
+            all_cats.append(room_header)
             # Sort entries by date_obj (ascending - older first), then by days (ascending)
             sorted_entries = sorted(cats_by_room[room], key=lambda x: (x[0], x[1]))
             for _, _, entry in sorted_entries:
                 all_cats.append(entry)
-                total_cats_count += 1
             
             # Add newline between rooms (but not after the last room)
             if i < len(sorted_rooms) - 1:
                 all_cats.append('')
 
-        # Build and send message with cat count
+        # Calculate overall percentage
+        overall_percent = int((total_cats_count / total_capacity) * 100) if total_capacity > 0 else 0
+
+        # Build and send message with cat count and percentage
         if all_cats:
-            message = f"📋 {total_cats_count} кошек в котодоме\n\n" + "\n".join(all_cats)
+            message = f"📋 {total_cats_count} кошек в котодоме (🪫{total_cats_count}/{total_capacity}, {overall_percent}%)\n\n" + "\n".join(all_cats)
         else:
-            message = "📋 нет кошек в котодоме"
+            message = "📋 нет кошек в котодоме (0%)"
 
         await bot.send_message(
             topic_input_entity,
@@ -966,7 +988,7 @@ async def send_daily_cat_flat_changes_notification():
     process_notification_topic_id = settings_dict.get('process_notification_topic_id')
 
     try:
-        marked_topic_chat_id = int('-100'+str(process_notification_topic_id))
+        marked_topic_chat_id = int('-100'+str(settings_dict.get('topic_chat_id')))
         topic_entity = await bot.get_entity(marked_topic_chat_id)
         topic_input_entity = utils.get_input_channel(utils.get_input_peer(topic_entity))
     except (ValueError, Exception) as err:
