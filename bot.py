@@ -800,7 +800,10 @@ async def send_daily_cat_flat_status_notification():
                 'request_id': request_id,
                 'request_record_id': request_record_id,
                 'room': room,
-                'notes_kk': notes_kk
+                'notes_kk': notes_kk,
+                'requestor_name': requestor_name,
+                'in_date': str(in_date_raw) if in_date_raw else '',
+                'sterilization_date': str(sterilization_date_raw) if sterilization_date_raw else ''
             }
 
             # Build emoji string for unchecked fields (for display in middle)
@@ -900,7 +903,7 @@ async def send_daily_cat_flat_status_notification():
             room_capacity = room_capacities.get(room, 0)
             if room_capacity > 0:
                 room_percent = int((room_count / room_capacity) * 100)
-                room_header = f"<u>{room}</u> (🪫{room_count}/{room_capacity}, {room_percent}%)"
+                room_header = f"<u>{room}</u> ({room_count}/{room_capacity}, {room_percent}%🪫)"
             else:
                 # Room not in capacity list (e.g., "Без комнаты")
                 room_header = f"<u>{room}</u> ({room_count})"
@@ -921,7 +924,7 @@ async def send_daily_cat_flat_status_notification():
 
         # Build and send message with cat count and percentage
         if all_cats:
-            message = f"📋 {total_cats_count} кошек в котодоме (🪫{total_cats_count}/{total_capacity}, {overall_percent}%)\n\n" + "\n".join(all_cats)
+            message = f"📋 {total_cats_count} кошек в котодоме ({total_cats_count}/{total_capacity}, {overall_percent}%🪫)\n\n" + "\n".join(all_cats)
         else:
             message = "📋 нет кошек в котодоме (0%)"
 
@@ -947,28 +950,60 @@ async def send_daily_cat_flat_status_notification():
     except Exception as err:
         logging.error(f"Error sending daily cat flat status notification: {err}", exc_info=True)
 
-# Helper function to format cat entry with links
-def format_cat_entry(cat_data):
-    """Format a cat entry with links for display."""
-    request_id = cat_data['request_id']
-    request_record_id = cat_data['request_record_id']
-    record_id = cat_data['record_id']
-    
-    # Format request_id as link if request_record_id is available
-    if request_record_id:
-        request_id_url = f"https://catebi.softr.app/sterilization-request-details?recordId={request_record_id}"
-        request_id_link = f'<a href="{request_id_url}">{request_id}</a>'
+# Helper function to format cat entry with full details
+def format_cat_entry_full(cat_data_dict, full_cat_data=None):
+    """Format a cat entry with request_id, requestor_name, status, days, and кд link."""
+    # Get data from cat_data_dict or full_cat_data
+    if full_cat_data:
+        request_id = full_cat_data.get('request_id', cat_data_dict.get('request_id', 'N/A'))
+        request_record_id = full_cat_data.get('request_record_id', cat_data_dict.get('request_record_id'))
+        record_id = full_cat_data.get('record_id', cat_data_dict.get('record_id'))
+        requestor_name = full_cat_data.get('requestor_name', '')
+        status = full_cat_data.get('status', cat_data_dict.get('status', ''))
+        notes_kk = full_cat_data.get('notes_kk', '')
+        fields_data = full_cat_data.get('fields_data', {})
+        in_date_raw = fields_data.get('in_date') if fields_data else None
+        sterilization_date_raw = fields_data.get('sterilization_date') if fields_data else None
     else:
-        request_id_link = request_id
-
-    # Format details link if record_id is available
+        # Try to get from cat_data_dict (for departed cats from JSON state)
+        request_id = cat_data_dict.get('request_id', 'N/A')
+        request_record_id = cat_data_dict.get('request_record_id')
+        record_id = cat_data_dict.get('record_id')
+        requestor_name = cat_data_dict.get('requestor_name', '')
+        status = cat_data_dict.get('status', '')
+        notes_kk = cat_data_dict.get('notes_kk', '')
+        # Get dates from saved state (they're stored as strings)
+        in_date_raw = cat_data_dict.get('in_date') or None
+        sterilization_date_raw = cat_data_dict.get('sterilization_date') or None
+    
+    # Calculate days
+    today = datetime.now().date()
+    date_obj = parse_airtable_date(sterilization_date_raw) or parse_airtable_date(in_date_raw)
+    
+    if date_obj:
+        days = (today - date_obj).days
+        days_text = f"{days} дн в "
+    else:
+        days_text = "срок пребывания в "
+    
+    # Format request_id (no link, just text)
+    request_id_text = str(request_id)
+    
+    # Format requestor_name
+    requestor_part = f" ({requestor_name})" if requestor_name else ""
+    
+    # Format кд link
     if record_id:
         details_url = f"https://catebi.softr.app/cat-flat-fostering-details?recordId={record_id}"
-        details_link = f'<a href="{details_url}">kk_link</a>'
+        kd_link = f'<a href="{details_url}">кд</a>'
     else:
-        details_link = 'kk_link'
-
-    return f"{request_id_link}, {details_link}"
+        kd_link = 'кд'
+    
+    # Format notes_kk
+    notes_part = f" ({notes_kk.strip()})" if notes_kk and notes_kk.strip() else ""
+    
+    # Format: request_id (requestor_name), <i>status</i>, days in кд (notes_kk)
+    return f"{request_id_text}{requestor_part}, <i>{status}</i>, {days_text}{kd_link}{notes_part}"
 
 # send daily cat flat changes notification at 22:00
 @logger
@@ -1044,7 +1079,7 @@ async def send_daily_cat_flat_changes_notification():
                 'request_id': cat_data['request_id'],
                 'request_record_id': cat_data['request_record_id'],
                 'room': cat_data['room'],
-                'cat_data': cat_data  # Keep full data for formatting
+                'full_cat_data': cat_data  # Keep full normalized data for formatting
             }
 
         # Compare and categorize changes
@@ -1096,54 +1131,44 @@ async def send_daily_cat_flat_changes_notification():
         
         # New cats
         if new_cats:
-            message_parts.append("<b>появились в котоквартире:</b>")
-            for cat_data in new_cats:
-                entry = format_cat_entry(cat_data)
+            message_parts.append("🆕 <b>появились в котоквартире:</b>")
+            for cat_data_dict in new_cats:
+                full_cat_data = cat_data_dict.get('full_cat_data')
+                entry = format_cat_entry_full(cat_data_dict, full_cat_data)
                 message_parts.append(entry)
             message_parts.append("")
 
         # Departed cats
         if departed_cats:
-            message_parts.append("<b>выехали из котоквартиры:</b>")
+            message_parts.append("🚙 <b>выехали из котоквартиры:</b>")
             for prev_cat in departed_cats:
-                # Format entry for departed cat (use prev data)
-                request_id = prev_cat['request_id']
-                request_record_id = prev_cat.get('request_record_id')
-                record_id = prev_cat['record_id']
-                
-                if request_record_id:
-                    request_id_url = f"https://catebi.softr.app/sterilization-request-details?recordId={request_record_id}"
-                    request_id_link = f'<a href="{request_id_url}">{request_id}</a>'
-                else:
-                    request_id_link = request_id
-
-                if record_id:
-                    details_url = f"https://catebi.softr.app/cat-flat-fostering-details?recordId={record_id}"
-                    details_link = f'<a href="{details_url}">kk_link</a>'
-                else:
-                    details_link = 'kk_link'
-
-                message_parts.append(f"{request_id_link}, {details_link}")
+                # For departed cats, we need to reconstruct the format from prev_cat
+                # prev_cat doesn't have full_cat_data, so we'll use what we have
+                entry = format_cat_entry_full(prev_cat)
+                message_parts.append(entry)
             message_parts.append("")
 
         # Status changes
         if status_changes:
-            message_parts.append("<b>изменения статуса:</b>")
+            message_parts.append("🔄 <b>изменения статуса:</b>")
             for (prev_status, new_status), cats in status_changes.items():
                 message_parts.append(f"{prev_status} -> {new_status}:")
-                for cat_data in cats:
-                    entry = format_cat_entry(cat_data)
+                for cat_data_dict in cats:
+                    full_cat_data = cat_data_dict.get('full_cat_data')
+                    entry = format_cat_entry_full(cat_data_dict, full_cat_data)
                     message_parts.append(entry)
             message_parts.append("")
 
         # Medical changes
         if medical_changes:
-            message_parts.append("<b>изменения обработки:</b>")
+            message_parts.append("💊 <b>медобработка:</b>")
             for med_change in medical_changes:
-                cat_data = med_change['cat']
-                entry = format_cat_entry(cat_data)
-                changes_str = " ".join(med_change['changes'])
-                message_parts.append(f"{entry} {changes_str}")
+                cat_data_dict = med_change['cat']
+                full_cat_data = cat_data_dict.get('full_cat_data')
+                entry = format_cat_entry_full(cat_data_dict, full_cat_data)
+                # Format changes emojis: join with no space, then add space before entry
+                changes_str = "".join(med_change['changes'])
+                message_parts.append(f"{changes_str} {entry}")
             message_parts.append("")
 
         # Send message
