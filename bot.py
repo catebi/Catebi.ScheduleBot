@@ -733,7 +733,7 @@ async def fetch_cat_flat_records():
 
 # send daily cat flat status notification at 10:00
 @logger
-@aiocron.crontab('00 10 * * *') # every day at 10:00
+@aiocron.crontab('20 11 * * *') # every day at 10:00
 @airtable_context('daily_cat_flat_status_notification')
 async def send_daily_cat_flat_status_notification():
     global topic_input_entity, process_notification_topic_id
@@ -790,6 +790,10 @@ async def send_daily_cat_flat_status_notification():
             notes_kk = cat_data.get('notes_kk', '')
             requestor_name = cat_data.get('requestor_name', '')
 
+            # Get dates for state saving and calculations
+            in_date_raw = fields_data.get('in_date')
+            sterilization_date_raw = fields_data.get('sterilization_date')
+
             # Save state data for JSON
             state_data['cats'][record_id] = {
                 'record_id': record_id,
@@ -830,8 +834,6 @@ async def send_daily_cat_flat_status_notification():
             end_emoji_str = ''.join(end_emojis)
 
             # Calculate days in cat flat
-            in_date_raw = fields_data.get('in_date')
-            sterilization_date_raw = fields_data.get('sterilization_date')
 
             # Try sterilization_date first, then in_date
             date_obj = parse_airtable_date(sterilization_date_raw) or parse_airtable_date(in_date_raw)
