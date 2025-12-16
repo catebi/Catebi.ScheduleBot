@@ -733,7 +733,7 @@ async def fetch_cat_flat_records():
 
 # send daily cat flat status notification at 10:00
 @logger
-@aiocron.crontab('20 11 * * *') # every day at 10:00
+@aiocron.crontab('00 10 * * *') # every day at 09:00
 @airtable_context('daily_cat_flat_status_notification')
 async def send_daily_cat_flat_status_notification():
     global topic_input_entity, process_notification_topic_id
@@ -1096,8 +1096,50 @@ async def send_daily_cat_flat_changes_notification():
                 new_cats.append(cat_data)
 
         # Find departed cats and check for changes
+        # For departed cats (present in prev_state, absent in current filtered set),
+        # fetch their *current* status and notes_kk from Airtable in batches.
+        departed_ids = [rid for rid in prev_cats.keys() if rid not in current_cats]
+        departed_current_map = {}
+        if departed_ids and airtable_sterilization_base_id and sterilization_api:
+            try:
+                table_cf = sterilization_api.table(airtable_sterilization_base_id, 'cat_flat_fostering')
+                # Keep chunks small to avoid Airtable formula length limits
+                chunk_size = 25
+                for i in range(0, len(departed_ids), chunk_size):
+                    chunk = departed_ids[i:i + chunk_size]
+                    # Airtable formula supports RECORD_ID()
+                    formula_str = "OR(" + ",".join([f"RECORD_ID()='{rid}'" for rid in chunk]) + ")"
+                    records = table_cf.all(
+                        formula=formula_str,
+                        fields=['status', 'notes_kk']
+                    )
+                    for rec in records:
+                        rid = rec.get('id')
+                        if not rid:
+                            continue
+                        f = rec.get('fields', {})
+                        status_val = f.get('status', '')
+                        notes_raw = f.get('notes_kk', '')
+                        if isinstance(notes_raw, list) and len(notes_raw) > 0:
+                            notes_val = str(notes_raw[0])
+                        elif notes_raw:
+                            notes_val = str(notes_raw)
+                        else:
+                            notes_val = ''
+                        departed_current_map[rid] = {
+                            'status': status_val,
+                            'notes_kk': notes_val,
+                        }
+            except Exception as fetch_err:
+                logging.warning(f"Could not batch fetch departed cats status/notes: {fetch_err}")
+
         for record_id, prev_cat in prev_cats.items():
             if record_id not in current_cats:
+                # overwrite with actual current values if available
+                cur = departed_current_map.get(record_id)
+                if cur:
+                    prev_cat['status'] = cur.get('status', prev_cat.get('status', ''))
+                    prev_cat['notes_kk'] = cur.get('notes_kk', prev_cat.get('notes_kk', ''))
                 departed_cats.append(prev_cat)
             else:
                 curr_cat = current_cats[record_id]
