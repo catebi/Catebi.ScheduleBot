@@ -731,6 +731,223 @@ async def fetch_cat_flat_records():
         logging.error(f"Error fetching cat flat records: {err}", exc_info=True)
         return []
 
+# ----------------------------------------------------------------------------
+# CatFlat overview builder (shared by cron + /catflat_overview)
+# ----------------------------------------------------------------------------
+@airtable_context('build_cat_flat_overview')
+async def build_cat_flat_overview():
+    """
+    Build CatFlat overview message and a JSON-serializable state snapshot.
+    Shared between scheduled notification and manual /catflat_overview command.
+    """
+    # Fetch normalized cat records
+    normalized_cats = await fetch_cat_flat_records()
+    if not normalized_cats:
+        return None, None
+
+    # Group by room: {room: [(date_obj, days, entry), ...]}
+    cats_by_room = {}
+    today = datetime.now().date()
+
+    # Prepare state data for saving to JSON
+    state_data = {
+        'timestamp': datetime.now().isoformat(),
+        'cats': {}
+    }
+
+    for cat_data in normalized_cats:
+        fields_data = cat_data['fields_data']
+        is_deflead = cat_data['is_deflead']
+        is_vaccinated = cat_data['is_vaccinated']
+        is_dewormed = cat_data['is_dewormed']
+        has_med_care = bool(fields_data.get('💊 med_care', False))
+        request_id = cat_data['request_id']
+        request_record_id = cat_data['request_record_id']
+        record_id = cat_data['record_id']
+        room = cat_data['room']
+        status = cat_data['status']
+        notes_kk = cat_data.get('notes_kk', '')
+        requestor_name = cat_data.get('requestor_name', '')
+
+        # Get dates for state saving and calculations
+        in_date_raw = fields_data.get('in_date')
+        sterilization_date_raw = fields_data.get('sterilization_date')
+
+        # Save state data for JSON (used by changes notification)
+        state_data['cats'][record_id] = {
+            'record_id': record_id,
+            'status': status,
+            'is_deflead': is_deflead,
+            'is_vaccinated': is_vaccinated,
+            'is_dewormed': is_dewormed,
+            'request_id': request_id,
+            'request_record_id': request_record_id,
+            'room': room,
+            'notes_kk': notes_kk,
+            'requestor_name': requestor_name,
+            'in_date': str(in_date_raw) if in_date_raw else '',
+            'sterilization_date': str(sterilization_date_raw) if sterilization_date_raw else ''
+        }
+
+        # Build emoji string for unchecked fields (middle)
+        emojis = []
+        if not is_deflead:
+            emojis.append('🦟')
+        if not is_vaccinated:
+            required_vaccination = fields_data.get('required_vaccination', '')
+            if required_vaccination:
+                emojis.append('💉' + ('(' + required_vaccination + ')'))
+            else:
+                emojis.append('💉')
+        if not is_dewormed:
+            emojis.append('𓆑')
+        emoji_str = ''.join(emojis)
+
+        # Track end emojis separately
+        end_emojis = []
+        if has_med_care:
+            end_emojis.append('💊')
+        if (not is_deflead) or (not is_vaccinated) or (not is_dewormed):
+            end_emojis.append('💉')
+        end_emoji_str = ''.join(end_emojis)
+
+        # Calculate days in cat flat (sterilization_date first, then in_date)
+        date_obj = parse_airtable_date(sterilization_date_raw) or parse_airtable_date(in_date_raw)
+        if date_obj:
+            days = (today - date_obj).days
+            days_prefix = f"{days} дн в "
+        else:
+            days = 999999  # sort unknowns to the end
+            days_prefix = "срок пребывания в "
+
+        # Determine traffic-light emoji by days
+        if days < 7:
+            status_emoji = '🟢'
+        elif days < 30:
+            status_emoji = '🟡'
+        else:
+            status_emoji = '🔴'
+
+        # Links
+        if request_record_id:
+            request_id_url = f"https://catebi.softr.app/sterilization-request-details?recordId={request_record_id}"
+            request_id_link = f'<a href="{request_id_url}">{request_id}</a>'
+        else:
+            request_id_link = request_id
+
+        if record_id:
+            details_url = f"https://catebi.softr.app/cat-flat-fostering-details?recordId={record_id}"
+            kk_link = f'<a href="{details_url}">кд</a>'
+        else:
+            kk_link = 'кд'
+
+        requestor_part = f" ({requestor_name})" if requestor_name else ""
+        entry = f"{status_emoji} {request_id_link}{requestor_part}, <i>{status}</i>, {days_prefix}{kk_link}{' ' + end_emoji_str if end_emoji_str else ''}"
+
+        # notes_kk at the end
+        notes_kk = notes_kk.strip() if notes_kk else ''
+        if notes_kk:
+            entry += f" ({notes_kk})"
+
+        # Group by room
+        if room not in cats_by_room:
+            cats_by_room[room] = []
+        cats_by_room[room].append((date_obj if date_obj else datetime.max.date(), days, entry))
+
+    # Room capacities
+    room_capacities = {
+        'K1': 10,
+        'K2': 10,
+        'Hall': 4
+    }
+    total_capacity = sum(room_capacities.values())  # 24
+
+    # Sort rooms asc, entries oldest first
+    sorted_rooms = sorted(cats_by_room.keys(), reverse=False)
+    all_cats = []
+    total_cats_count = 0
+    for i, room in enumerate(sorted_rooms):
+        room_count = len(cats_by_room[room])
+        total_cats_count += room_count
+
+        room_capacity = room_capacities.get(room, 0)
+        if room_capacity > 0:
+            room_percent = int((room_count / room_capacity) * 100)
+            room_header = f"<u>{room}</u> ({room_count}/{room_capacity}, {room_percent}%🪫)"
+        else:
+            room_header = f"<u>{room}</u> ({room_count})"
+
+        all_cats.append(room_header)
+        sorted_entries = sorted(cats_by_room[room], key=lambda x: (x[0], x[1]))
+        for _, _, entry in sorted_entries:
+            all_cats.append(entry)
+
+        if i < len(sorted_rooms) - 1:
+            all_cats.append('')
+
+    overall_percent = int((total_cats_count / total_capacity) * 100) if total_capacity > 0 else 0
+    if all_cats:
+        message = f"📋 {total_cats_count} кошек в котодоме ({total_cats_count}/{total_capacity}, {overall_percent}%🪫)\n\n" + "\n".join(all_cats)
+    else:
+        message = "📋 нет кошек в котодоме (0%)"
+
+    # Append today's schedule summary (medical + cleaning)
+    try:
+        tz = datetime.now().astimezone().tzinfo
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=tz)
+        today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=tz)
+
+        schedule_formula = AND(
+            GTE(Field('date'), today_start),
+            LTE(Field('date'), today_end),
+            OR(match({'type': 'medical'}), match({'type': 'cleaning'}))
+        )
+
+        today_schedules = Schedule.all(
+            formula=schedule_formula,
+            fields=['date', 'telegram', 'type']
+        )
+
+        def _tg(u: str | None) -> str:
+            if not u:
+                return "@unknown"
+            u = str(u).strip()
+            return u if u.startswith('@') else f"@{u}"
+
+        cleaning = []
+        medical = []
+        for s in today_schedules or []:
+            try:
+                s.date = s.date.astimezone(tz)
+            except Exception:
+                pass
+            t = s.date.strftime('%H:%M') if getattr(s, 'date', None) else '??:??'
+            if s.type == 'cleaning':
+                cleaning.append((t, _tg(getattr(s, 'telegram', None))))
+            elif s.type == 'medical':
+                medical.append((t, _tg(getattr(s, 'telegram', None))))
+
+        cleaning.sort(key=lambda x: x[0])
+        medical.sort(key=lambda x: x[0])
+
+        schedule_lines = []
+        if cleaning:
+            schedule_lines.append("🧹 уборка сегодня: " + ", ".join([f"{u} ({t})" for t, u in cleaning]))
+        else:
+            schedule_lines.append("🧹 уборка сегодня: ❗️нет дежурных")
+
+        if medical:
+            # if multiple, show all
+            schedule_lines.append("🏥 медуход сегодня: " + ", ".join([f"{u} ({t})" for t, u in medical]))
+        else:
+            schedule_lines.append("🏥 медуход сегодня: ❗️нет дежурного")
+
+        message = message + "\n\n" + "\n".join(schedule_lines)
+    except Exception as err:
+        logging.error(f"Error building catflat schedule summary: {err}", exc_info=True)
+
+    return message, state_data
+
 # send daily cat flat status notification at 10:00
 @logger
 @aiocron.crontab('00 10 * * *') # every day at 09:00
@@ -757,178 +974,10 @@ async def send_daily_cat_flat_status_notification():
         return
 
     try:
-        # Fetch normalized cat records
-        normalized_cats = await fetch_cat_flat_records()
-        
-        if not normalized_cats:
+        message, state_data = await build_cat_flat_overview()
+        if not message:
             logging.warning("No cat records found for status notification.")
             return
-
-        # Process ALL records (no filtering)
-        # Group by room: {room: [(date_obj, days, entry), ...]}
-        cats_by_room = {}
-        today = datetime.now().date()
-        
-        # Prepare state data for saving to JSON
-        state_data = {
-            'timestamp': datetime.now().isoformat(),
-            'cats': {}
-        }
-
-        for cat_data in normalized_cats:
-            fields_data = cat_data['fields_data']
-            record = cat_data['record']
-            is_deflead = cat_data['is_deflead']
-            is_vaccinated = cat_data['is_vaccinated']
-            is_dewormed = cat_data['is_dewormed']
-            has_med_care = bool(fields_data.get('💊 med_care', False))
-            request_id = cat_data['request_id']
-            request_record_id = cat_data['request_record_id']
-            record_id = cat_data['record_id']
-            room = cat_data['room']
-            status = cat_data['status']
-            notes_kk = cat_data.get('notes_kk', '')
-            requestor_name = cat_data.get('requestor_name', '')
-
-            # Get dates for state saving and calculations
-            in_date_raw = fields_data.get('in_date')
-            sterilization_date_raw = fields_data.get('sterilization_date')
-
-            # Save state data for JSON
-            state_data['cats'][record_id] = {
-                'record_id': record_id,
-                'status': status,
-                'is_deflead': is_deflead,
-                'is_vaccinated': is_vaccinated,
-                'is_dewormed': is_dewormed,
-                'request_id': request_id,
-                'request_record_id': request_record_id,
-                'room': room,
-                'notes_kk': notes_kk,
-                'requestor_name': requestor_name,
-                'in_date': str(in_date_raw) if in_date_raw else '',
-                'sterilization_date': str(sterilization_date_raw) if sterilization_date_raw else ''
-            }
-
-            # Build emoji string for unchecked fields (for display in middle)
-            emojis = []
-            if not is_deflead:
-                emojis.append('🦟')
-            if not is_vaccinated:
-                # required_vaccination field value is 'complex ✔, rabies ❌'
-                required_vaccination = fields_data.get('required_vaccination', '')
-                if required_vaccination:
-                    emojis.append('💉' + ('(' + required_vaccination +')'))
-                else:
-                    emojis.append('💉')
-            if not is_dewormed:
-                emojis.append('𓆑')
-            emoji_str = ''.join(emojis)
-            
-            # Track end emojis separately
-            end_emojis = []
-            if has_med_care:
-                end_emojis.append('💊')
-            if not is_deflead or not is_vaccinated or not is_dewormed:
-                end_emojis.append('💉')
-            end_emoji_str = ''.join(end_emojis)
-
-            # Calculate days in cat flat
-
-            # Try sterilization_date first, then in_date
-            date_obj = parse_airtable_date(sterilization_date_raw) or parse_airtable_date(in_date_raw)
-
-            if date_obj:
-                days = (today - date_obj).days
-                days_prefix = f"{days} дн в "
-            else:
-                days = 999999  # Use large number for sorting if date is unknown
-                days_prefix = "срок пребывания в "
-
-            # Determine emoji based on days count
-            if days < 7:
-                status_emoji = '🟢'
-            elif days < 30:
-                status_emoji = '🟡'
-            else:
-                status_emoji = '🔴'
-
-            # Format entry with links: {status_emoji} {request_id_link} {emojis} {days}, {details_link}
-            # Format request_id as link if request_record_id is available
-            if request_record_id:
-                request_id_url = f"https://catebi.softr.app/sterilization-request-details?recordId={request_record_id}"
-                request_id_link = f'<a href="{request_id_url}">{request_id}</a>'
-            else:
-                request_id_link = request_id
-
-            # Format details link if record_id is available - use "кд" as link text
-            if record_id:
-                details_url = f"https://catebi.softr.app/cat-flat-fostering-details?recordId={record_id}"
-                kk_link = f'<a href="{details_url}">кд</a>'
-            else:
-                kk_link = 'кд'
-
-            # Format: {status_emoji} {request_id_link} (requestor_name), <i>status</i>, {days_prefix}{kk_link} {end_emojis}
-            requestor_part = f" ({requestor_name})" if requestor_name else ""
-            entry = f"{status_emoji} {request_id_link}{requestor_part}, <i>{status}</i>, {days_prefix}{kk_link}{' ' + end_emoji_str if end_emoji_str else ''}"
-
-            # trim notes_kk 
-            notes_kk = notes_kk.strip() if notes_kk else ''
-
-            # add notes_kk if it exists to the end of the entry            
-            if notes_kk:
-                entry += f" ({notes_kk})"
-            
-            # Group by room, storing date_obj and days for sorting
-            # Use max date for records without dates so they sort to the end
-            if room not in cats_by_room:
-                cats_by_room[room] = []
-            cats_by_room[room].append((date_obj if date_obj else datetime.max.date(), days, entry))
-
-        # Room capacities
-        room_capacities = {
-            'K1': 10,
-            'K2': 10,
-            'Hall': 4
-        }
-        total_capacity = sum(room_capacities.values())  # 24
-
-        # Sort rooms alphabetically (ascending) and entries within each room by date (ascending - older first)
-        sorted_rooms = sorted(cats_by_room.keys(), reverse=False)
-        all_cats = []
-        total_cats_count = 0
-        for i, room in enumerate(sorted_rooms):
-            room_count = len(cats_by_room[room])
-            total_cats_count += room_count
-            
-            # Calculate room percentage
-            room_capacity = room_capacities.get(room, 0)
-            if room_capacity > 0:
-                room_percent = int((room_count / room_capacity) * 100)
-                room_header = f"<u>{room}</u> ({room_count}/{room_capacity}, {room_percent}%🪫)"
-            else:
-                # Room not in capacity list (e.g., "Без комнаты")
-                room_header = f"<u>{room}</u> ({room_count})"
-            
-            # Add room header
-            all_cats.append(room_header)
-            # Sort entries by date_obj (ascending - older first), then by days (ascending)
-            sorted_entries = sorted(cats_by_room[room], key=lambda x: (x[0], x[1]))
-            for _, _, entry in sorted_entries:
-                all_cats.append(entry)
-            
-            # Add newline between rooms (but not after the last room)
-            if i < len(sorted_rooms) - 1:
-                all_cats.append('')
-
-        # Calculate overall percentage
-        overall_percent = int((total_cats_count / total_capacity) * 100) if total_capacity > 0 else 0
-
-        # Build and send message with cat count and percentage
-        if all_cats:
-            message = f"📋 {total_cats_count} кошек в котодоме ({total_cats_count}/{total_capacity}, {overall_percent}%🪫)\n\n" + "\n".join(all_cats)
-        else:
-            message = "📋 нет кошек в котодоме (0%)"
 
         await bot.send_message(
             topic_input_entity,
@@ -943,14 +992,30 @@ async def send_daily_cat_flat_status_notification():
             state_file_path = os.path.join(os.path.dirname(__file__), 'cat_flat_state.json')
             with open(state_file_path, 'w', encoding='utf-8') as f:
                 json.dump(state_data, f, ensure_ascii=False, indent=2)
-            logging.info(f"Cat flat state saved to {state_file_path}. Total cats: {len(state_data['cats'])}")
+            logging.info(f"Cat flat state saved to {state_file_path}. Total cats: {len(state_data['cats']) if state_data else 0}")
         except Exception as save_err:
             logging.error(f"Error saving cat flat state to JSON: {save_err}", exc_info=True)
 
-        logging.info(f"Daily cat flat status notification sent successfully. Total cats: {len([c for c in all_cats if not c.startswith('<u>') and c])}")
+        logging.info("Daily cat flat status notification sent successfully.")
 
     except Exception as err:
         logging.error(f"Error sending daily cat flat status notification: {err}", exc_info=True)
+
+# ----------------------------------------------------------------------------
+# Command: /catflat_overview (available in private chats and group chats)
+# ----------------------------------------------------------------------------
+@bot.on(events.NewMessage(pattern='/catflat_overview'))
+@logger
+@airtable_context('catflat_overview_command')
+async def catflat_overview_handler(event):
+    try:
+        message, _state_data = await build_cat_flat_overview()
+        if not message:
+            message = "📋 нет кошек в котодоме (0%)"
+        # Reply to keep topic thread context in groups with topics
+        await event.reply(message, parse_mode='html', link_preview=False)
+    except Exception as err:
+        logging.error(f"Error handling /catflat_overview: {err}", exc_info=True)
 
 # Helper function to format cat entry with full details
 def format_cat_entry_full(cat_data_dict, full_cat_data=None):
