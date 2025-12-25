@@ -1072,6 +1072,48 @@ def format_cat_entry_full(cat_data_dict, full_cat_data=None):
     # Format: request_id (requestor_name), <i>status</i>, days in кд (notes_kk)
     return f"{request_id_text}{requestor_part}, <i>{status}</i>, {days_text}{kd_link}{notes_part}"
 
+# Helper for status-change list: no duplicated status (it's in the group header),
+# but request_id should be a link.
+def format_status_change_entry(cat_data_dict):
+    """
+    Format: <a href="request_details">1234</a> (requestor_name) 10 дн в кд (notes_kk)
+    """
+    full_cat_data = cat_data_dict.get('full_cat_data') or {}
+    fields_data = full_cat_data.get('fields_data', {}) if isinstance(full_cat_data, dict) else {}
+
+    request_id = cat_data_dict.get('request_id', 'N/A')
+    request_record_id = cat_data_dict.get('request_record_id')
+    requestor_name = ''
+    notes_kk = ''
+
+    if isinstance(full_cat_data, dict):
+        requestor_name = full_cat_data.get('requestor_name', '') or ''
+        notes_kk = full_cat_data.get('notes_kk', '') or ''
+
+    # days in кд
+    today = datetime.now().date()
+    in_date_raw = fields_data.get('in_date') if fields_data else None
+    sterilization_date_raw = fields_data.get('sterilization_date') if fields_data else None
+    date_obj = parse_airtable_date(sterilization_date_raw) or parse_airtable_date(in_date_raw)
+    if date_obj:
+        days = (today - date_obj).days
+        days_part = f"{days} дн в кд"
+    else:
+        days_part = "срок пребывания в кд неизвестен"
+
+    # request_id link (to request details)
+    if request_record_id:
+        url = f"https://catebi.softr.app/sterilization-request-details?recordId={request_record_id}"
+        request_id_part = f'<a href="{url}">{request_id}</a>'
+    else:
+        request_id_part = str(request_id)
+
+    requestor_part = f" ({requestor_name})" if requestor_name else ""
+    notes_kk = notes_kk.strip() if isinstance(notes_kk, str) else str(notes_kk)
+    notes_part = f" ({notes_kk})" if notes_kk else ""
+
+    return f"{request_id_part}{requestor_part} {days_part}{notes_part}"
+
 # send daily cat flat changes notification at 22:00
 @logger
 @aiocron.crontab('00 22 * * *') # every day at 22:00 (10 PM)
@@ -1260,12 +1302,14 @@ async def send_daily_cat_flat_changes_notification():
         # Status changes
         if status_changes:
             message_parts.append("🔄 <b>изменения статуса:</b>")
+            message_parts.append("")
             for (prev_status, new_status), cats in status_changes.items():
-                message_parts.append(f"{prev_status} -> {new_status}:")
+                # underlined group header + blank line separation
+                message_parts.append(f"<u>{prev_status} -> {new_status}</u>")
                 for cat_data_dict in cats:
-                    full_cat_data = cat_data_dict.get('full_cat_data')
-                    entry = format_cat_entry_full(cat_data_dict, full_cat_data)
+                    entry = format_status_change_entry(cat_data_dict)
                     message_parts.append(entry)
+                message_parts.append("")
             message_parts.append("")
 
         # Medical changes
