@@ -85,7 +85,9 @@ WORD_JOINER = '\u2060'
 NBSP = '\u00A0'
 def build_label(date_type: str, username: str):
     if date_type == 'cleaning':
-        return '🧹' + WORD_JOINER + username
+        return '🧹' + WORD_JOINER + '🏠' + WORD_JOINER + username
+    if date_type == 'cleaning_catloft':
+        return '🧹' + WORD_JOINER + '🪜' + WORD_JOINER + username
     if date_type == 'medical':
         return '🏥' + WORD_JOINER + username
     if date_type == 'steril_release':
@@ -1597,7 +1599,7 @@ async def callback_handler(event):
             return
 
         type = data.split(';')[1]
-        if type not in ['cleaning', 'medical', 'steril_acceptance', 'steril_release']:
+        if type not in ['cleaning', 'medical', 'steril_acceptance', 'steril_release', 'cleaning_catloft']:
             if type == 'cln':
                 type = 'cleaning'
             elif type == 'med':
@@ -1607,6 +1609,16 @@ async def callback_handler(event):
             elif type == 'steril_release':
                 type = 'steril_release'
 
+        # Show location selection for cleaning before proceeding to date selection
+        # (skip if location was already confirmed, indicated by a third segment in data)
+        if type == 'cleaning' and len(data.split(';')) < 3:
+            buttons = [
+                [Button.inline(button_type_cleaning_location[language]['catflat'], data='new_schedule;cleaning;loc')],
+                [Button.inline(button_type_cleaning_location[language]['catloft'], data='new_schedule;cleaning_catloft')],
+                [Button.inline(button_back[language], data='back')]
+            ]
+            await event.edit(new_schedule_cleaning_location_prompt[language], buttons=buttons)
+            return
 
         # prepare a list of available dates, from today to 2 weeks in advance
         available_dates = {}
@@ -1614,6 +1626,7 @@ async def callback_handler(event):
             date = datetime.now().date() + timedelta(days=i)
             available_dates[date] = {}
             available_dates[date]['cleaning'] = 0
+            available_dates[date]['cleaning_catloft'] = 0
             available_dates[date]['medical'] = 0
             available_dates[date]['steril_release'] = 0
             available_dates[date]['steril_acceptance'] = 0
@@ -1629,7 +1642,7 @@ async def callback_handler(event):
                 available_dates[entry.date.date()][entry.type] += 1
 
         for date in available_dates.copy(): # copy the list to avoid RuntimeError
-            if (available_dates[date][type] == 2 and type == 'cleaning') or (available_dates[date][type] == 1 and type == 'medical'):
+            if (available_dates[date][type] == 2 and type in ['cleaning', 'cleaning_catloft']) or (available_dates[date][type] == 1 and type == 'medical'):
                 available_dates.pop(date)
 
         # check if the date is already scheduled by the user, remove it from the list
@@ -1640,13 +1653,16 @@ async def callback_handler(event):
                 available_dates.pop(date.date.date())
 
         # show a list of available dates
-        buttons = [
-            [Button.inline(f"{format_date_by_language(date, language)} {'1️⃣' if available_dates[date]['cleaning'] == 1 else '2️⃣' if available_dates[date]['cleaning'] == 2 else '🆓'}",
-                           data=f'add_schedule;{date};;{type}' if type == 'steril_acceptance' else f'set_schedule_time;{date};{type}')] for date in available_dates
-        ]
+        buttons = []
+        for date in available_dates:
+            slot_count = available_dates[date][type] if type in ['cleaning', 'cleaning_catloft'] else available_dates[date]['cleaning']
+            slot_indicator = '1️⃣' if slot_count == 1 else '2️⃣' if slot_count == 2 else '🆓'
+            cb_data = f'add_schedule;{date};;{type}' if type == 'steril_acceptance' else f'set_schedule_time;{date};{type}'
+            buttons.append([Button.inline(f"{format_date_by_language(date, language)} {slot_indicator}", data=cb_data)])
         buttons.append([Button.inline(button_back[language], data='back')])
         await event.edit(new_schedule_prompt[language].format(
                                 button_type_cleaning[language] if type == 'cleaning' else
+                                button_type_cleaning_location[language]['catloft'] if type == 'cleaning_catloft' else
                                 button_type_medical[language] if type == 'medical' else
                                 button_type_steril_acceptance[language] if type == 'steril_acceptance' else
                                 button_type_steril_release[language]
@@ -1731,6 +1747,7 @@ async def callback_handler(event):
         await event.edit(
             add_schedule_success[language].format(
                 button_type_cleaning[language] if type == 'cleaning' \
+                else button_type_cleaning_location[language]['catloft'] if type == 'cleaning_catloft' \
                 else button_type_medical[language] if type == 'medical' \
                 else button_type_steril_release[language],
                 format_date_by_language(date, language),
@@ -1745,16 +1762,18 @@ async def callback_handler(event):
             topic_input_entity,
             add_schedule_topic_message.format(
                 '🏥' if type == 'medical' \
-                else '🧹' if type == 'cleaning' \
+                else '🧹🏠' if type == 'cleaning' \
+                else '🧹🪜' if type == 'cleaning_catloft' \
                 else '😸⬆️',
                 user.telegram,
                 'медуходу' if type == 'medical' \
-                else 'уборке' if type == 'cleaning' \
+                else 'уборке в котоквартире' if type == 'cleaning' \
+                else 'уборке в котолофте' if type == 'cleaning_catloft' \
                 else 'выдаче кошков',
                 'сегодня' if date == datetime.now().date() else 'завтра' if date == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
                 date.strftime('%H:%M')
             ),
-            reply_to=cleaning_topic_id if type == 'cleaning' \
+            reply_to=cleaning_topic_id if type in ['cleaning', 'cleaning_catloft'] \
                 else medical_topic_id if type == 'medical' \
                 else steril_cat_topic_id
         )
@@ -1780,6 +1799,7 @@ async def callback_handler(event):
             [
                 Button.inline(f"{format_date_by_language(date.date, language)}: { \
                 button_type_cleaning[language] if date.type == 'cleaning' \
+                else button_type_cleaning_location[language]['catloft'] if date.type == 'cleaning_catloft' \
                 else button_type_medical[language] if date.type == 'medical' \
                 else button_type_steril_release[language] if date.type == 'steril_release' \
                 else button_type_steril_acceptance[language]}" + (f" ({(date.date).strftime('%H:%M')})" if date.type != 'steril_acceptance' else ''),
@@ -1812,6 +1832,7 @@ async def callback_handler(event):
         await event.edit(
             my_schedule_delete_prompt[language].format(
                 button_type_cleaning[language] if type == 'cleaning'
+                else button_type_cleaning_location[language]['catloft'] if type == 'cleaning_catloft'
                 else button_type_medical[language] if type == 'medical'
                 else button_type_steril_release[language] if type == 'steril_release'
                 else button_type_steril_acceptance[language],
@@ -1864,6 +1885,7 @@ async def callback_handler(event):
         await event.edit(
             delete_schedule_success[language].format(
                 button_type_cleaning[language] if type == 'cleaning'
+                else button_type_cleaning_location[language]['catloft'] if type == 'cleaning_catloft'
                 else button_type_medical[language] if type == 'medical'
                 else button_type_steril_release[language],
                 format_date_by_language(date, language),
@@ -1876,16 +1898,18 @@ async def callback_handler(event):
             topic_input_entity,
             delete_schedule_topic_message.format(
                 '🏥' if type == 'medical'
-                else '🧹' if type == 'cleaning'
+                else '🧹🏠' if type == 'cleaning'
+                else '🧹🪜' if type == 'cleaning_catloft'
                 else '😿⬆️',
                 user.telegram,
                 'медуходу' if type == 'medical'
-                else 'уборке' if type == 'cleaning'
+                else 'уборке в котоквартире' if type == 'cleaning'
+                else 'уборке в котолофте' if type == 'cleaning_catloft'
                 else 'выдаче кошков',
                 'сегодня' if date == datetime.now().date() else 'завтра' if date == datetime.now().date() + timedelta(days=1) else format_date_by_language(date, 'ru'),
                 date.strftime('%H:%M')
             ),
-            reply_to=cleaning_topic_id if type == 'cleaning'
+            reply_to=cleaning_topic_id if type in ['cleaning', 'cleaning_catloft']
             else medical_topic_id if type == 'medical'
             else steril_cat_topic_id
         )
