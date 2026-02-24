@@ -85,7 +85,9 @@ WORD_JOINER = '\u2060'
 NBSP = '\u00A0'
 def build_label(date_type: str, username: str):
     if date_type == 'cleaning':
-        return '🧹' + WORD_JOINER + username
+        return '🧹' + WORD_JOINER + '🏠' + WORD_JOINER + username
+    if date_type == 'cleaning_catloft':
+        return '🧹' + WORD_JOINER + '🪜' + WORD_JOINER + username
     if date_type == 'medical':
         return '🏥' + WORD_JOINER + username
     if date_type == 'steril_release':
