@@ -92,6 +92,11 @@ new_schedule_type_prompt = {
     'ru': "❓ Выберите тип дежурства, на которое хотите записаться."
 }
 
+new_schedule_cleaning_location_prompt = {
+    'en': "Where do you want to clean?",
+    'ru': "Где вы хотите провести уборку?"
+}
+
 new_schedule_prompt = {
     'en': "Choose a date you want to sign up for **{}**\n\nP.S. The date is hidden if there's enough volunteers already signed up for it.",
     'ru': "Выберите дату для смены **{}**, на которую хотите записаться.\n\nP.S. Дата скрыта, если на нее уже записались достаточно волонтёров."
@@ -300,6 +305,17 @@ button_new_schedule = {
 button_type_cleaning = {
     'en': "🧹 Cleaning",
     'ru': "🧹 Уборка"
+}
+
+button_type_cleaning_location = {
+    'en': {
+        'catflat': "🧹🏠 CatFlat",
+        'catloft': "🧹🪜 CatLoft"
+    },
+    'ru': {
+        'catflat': "🧹🏠 Котоквартира",
+        'catloft': "🧹🪜 Котолофт"
+    }
 }
 
 button_type_medical = {
