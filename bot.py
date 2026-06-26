@@ -1614,7 +1614,6 @@ async def callback_handler(event):
         if type == 'cleaning' and len(data.split(';')) < 3:
             buttons = [
                 [Button.inline(button_type_cleaning_location[language]['catflat'], data='new_schedule;cleaning;loc')],
-                [Button.inline(button_type_cleaning_location[language]['catloft'], data='new_schedule;cleaning_catloft')],
                 [Button.inline(button_back[language], data='back')]
             ]
             await event.edit(new_schedule_cleaning_location_prompt[language], buttons=buttons)
@@ -1640,10 +1639,6 @@ async def callback_handler(event):
             logging.info(f"Scheduled date: {entry.date.date()}, type: {entry.type}")
             if entry.date.date() in available_dates:
                 available_dates[entry.date.date()][entry.type] += 1
-
-        for date in available_dates.copy(): # copy the list to avoid RuntimeError
-            if (available_dates[date][type] == 2 and type in ['cleaning', 'cleaning_catloft']) or (available_dates[date][type] == 1 and type == 'medical'):
-                available_dates.pop(date)
 
         # check if the date is already scheduled by the user, remove it from the list
         user_scheduled_dates = Schedule.all(fields=['date', 'type'], formula=match({'telegram_chat_id': event.sender.id}))
