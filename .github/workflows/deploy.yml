@@ -2,11 +2,10 @@ name: Deploy Bot to VPS
 
 on:
   push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+    branches:
+      - main
 
 jobs:
-
   checkout:
     runs-on: ubuntu-latest
     outputs:
@@ -85,8 +84,8 @@ jobs:
             VERSION=${{ needs.checkout.outputs.bot_version }}
             EOF
             echo "Pulling Docker images..."
-            docker-compose down
-            docker-compose up --build -d
+            docker compose down
+            docker compose up --build -d
 
   notify_finish:
     needs: [checkout, notify_start, copy, build_deploy]
@@ -111,3 +110,4 @@ jobs:
           --data-urlencode "text=${failure_msg}" \
           --data-urlencode "message_thread_id=${{ vars.IT_TELEGRAM_CHAT_NOTIFY_TOPIC_ID }}" \
           --data-urlencode "parse_mode=HTML"
+
