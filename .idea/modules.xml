@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/Catebi.ScheduleBot.iml" filepath="$PROJECT_DIR$/.idea/Catebi.ScheduleBot.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/catebi-schedulebot.iml" filepath="$PROJECT_DIR$/.idea/catebi-schedulebot.iml" />
     </modules>
   </component>
 </project>

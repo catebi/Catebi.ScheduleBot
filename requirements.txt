@@ -1,4 +1,5 @@
-telethon
-pyairtable
-aiocron
-Babel
+Telethon==1.44.0
+pyairtable==3.4.0
+aiocron==2.1
+Babel==2.18.0
+requests==2.34.2
