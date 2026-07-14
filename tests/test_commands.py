@@ -151,6 +151,71 @@ async def test_set_topic_handler_admin_saves(make_event, user_factory, patch_vol
     assert sent_messages and "topic set successfully" in sent_messages[-1]["text"]
 
 
+async def test_set_alert_topic_rejects_non_admin(make_event, user_factory, patch_volunteer):
+    patch_volunteer(user_factory(language="ru", duties=["kk_cleaning"]))
+    event = make_event(is_private=False)
+
+    await commands.set_alert_topic_handler(event)
+
+    assert event.last_text == error_not_admin["ru"]
+
+
+async def test_set_alert_topic_admin_saves_and_applies(make_event, user_factory, patch_volunteer, monkeypatch):
+    patch_volunteer(user_factory(language="ru", duties=["kk_admin_curator"]))
+    # Baseline so monkeypatch restores state after the test (handler mutates it).
+    monkeypatch.setattr(commands.state, "alert_chat_id", None)
+    monkeypatch.setattr(commands.state, "alert_topic_id", None)
+    created = []
+
+    class FakeSettings:
+        def __init__(self, **kwargs):
+            self.key = kwargs.get("key")
+            self.value = kwargs.get("value")
+            created.append(self)
+
+        def save(self):
+            pass
+
+        @classmethod
+        def first(cls, **kw):
+            return None  # no existing rows
+
+    monkeypatch.setattr(commands, "Settings", FakeSettings)
+    event = make_event(is_private=False, chat_id=-1009, reply_to_msg_id=777)
+
+    await commands.set_alert_topic_handler(event)
+
+    by_key = {s.key: s.value for s in created}
+    assert by_key == {"alert_chat_id": -1009, "alert_topic_id": 777}
+    # Applied to live state immediately (no restart needed).
+    assert commands.state.alert_chat_id == -1009
+    assert commands.state.alert_topic_id == 777
+    assert "Alert topic set" in event.last_text
+
+
+async def test_logger_decorator_reraises_async():
+    """Regression: the @logger decorator must surface errors, not swallow them."""
+    from app.logging_setup import logger
+
+    @logger
+    async def boom():
+        raise ValueError("kaboom")
+
+    with pytest.raises(ValueError, match="kaboom"):
+        await boom()
+
+
+def test_logger_decorator_reraises_sync():
+    from app.logging_setup import logger
+
+    @logger
+    def boom():
+        raise ValueError("kaboom")
+
+    with pytest.raises(ValueError, match="kaboom"):
+        boom()
+
+
 async def test_set_topic_handler_creates_missing_settings_rows(
     make_event, user_factory, patch_volunteer, monkeypatch, sent_messages
 ):

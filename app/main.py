@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 # Importing app.bot_client configures logging (via setup_logging) and builds the client.
+from app import alerts
 from app.airtable_logger import patch_model_methods
 from app.bot_client import bot, bot_token
 from app.flows import dispatch  # noqa: F401
@@ -14,11 +15,16 @@ from app.services.schedule_service import update_volunteers
 
 async def main():
     await bot.start(bot_token=bot_token)
+    # Let the log-alert handler send onto this loop, and restore the saved topic.
+    alerts.set_loop(asyncio.get_running_loop())
+    await alerts.load_alert_topic()
     asyncio.Task(update_volunteers("startup"))
     await bot.run_until_disconnected()
 
 
 def run():
+    # Mirror WARNING/ERROR logs to the Telegram alert topic (no-op until set).
+    alerts.install()
     # Add request logging to the ORM models before any Airtable call happens.
     patch_model_methods()
     loop = asyncio.get_event_loop()

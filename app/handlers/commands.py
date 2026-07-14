@@ -152,6 +152,42 @@ async def set_topic_handler(event):
     await bot.send_message(event.sender.id, f"{topic_type.capitalize()} topic set successfully.")
 
 
+@bot.on(events.NewMessage(pattern="/set_alert_topic"))
+@logger
+async def set_alert_topic_handler(event):
+    user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
+    if not user:
+        await event.respond(error_not_registered["en"])
+        return
+
+    if DUTY_ADMIN_CURATOR not in user.duties:
+        await event.respond(error_not_admin[user.language])
+        return
+
+    if event.is_private:
+        await event.respond("Run this command inside the supergroup topic where alerts should be posted.")
+        return
+
+    # Persist the destination: this chat + the topic the command was sent in.
+    chat_setting = await run_airtable(Settings.first, formula=match({"key": "alert_chat_id"})) or Settings(
+        key="alert_chat_id"
+    )
+    chat_setting.value = event.chat.id
+    await run_airtable(chat_setting.save)
+
+    topic_setting = await run_airtable(Settings.first, formula=match({"key": "alert_topic_id"})) or Settings(
+        key="alert_topic_id"
+    )
+    topic_setting.value = event.message.reply_to_msg_id
+    await run_airtable(topic_setting.save)
+
+    # Apply immediately so alerts start flowing here without a restart.
+    state.alert_chat_id = event.chat.id
+    state.alert_topic_id = event.message.reply_to_msg_id
+
+    await event.reply("✅ Alert topic set. Warnings and errors will be posted here.")
+
+
 def _duties_code(user) -> str:
     """Pack the volunteer's duties into the ``new_schedule`` callback code."""
     duties_set = []

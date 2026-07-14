@@ -9,6 +9,12 @@ cleaning_topic_id = None
 medical_topic_id = None
 steril_cat_topic_id = None
 
+# Destination for the WARNING/ERROR alert mirror (see app.alerts).
+# alert_chat_id is stored without the "-100" supergroup prefix; alert_topic_id
+# is the topic's root message id (None => the group's General topic).
+alert_chat_id = None
+alert_topic_id = None
+
 # The last steril notification message, re-rendered by the "back" button.
 steril_notification_message = None
 
