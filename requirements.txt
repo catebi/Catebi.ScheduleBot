@@ -4,3 +4,4 @@ aiocron==2.1
 Babel==2.18.0
 requests==2.34.2
 python-dotenv==1.2.2
+sentry-sdk==2.65.0

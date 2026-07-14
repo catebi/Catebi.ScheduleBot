@@ -22,6 +22,13 @@ airtable_sterilization_base_id = os.getenv("AIRTABLE_STERILIZATION_BASE_ID", Non
 
 version = os.getenv("VERSION", "unknown")
 
+# GlitchTip / Sentry error tracking (optional; disabled when the DSN is empty).
+glitchtip_dsn = os.getenv("GLITCHTIP_DSN", None)
+# Deployment name attached to every reported event (e.g. production, staging).
+environment = os.getenv("ENVIRONMENT", "production")
+# Fraction of transactions sampled for performance tracing (0.0–1.0).
+glitchtip_traces_sample_rate = float(os.getenv("GLITCHTIP_TRACES_SAMPLE_RATE", "0.01"))
+
 SESSION_NAME = os.getenv("SESSION_NAME", "catebi")
 
 AIRTABLE_TIMEOUT = (10, 30)

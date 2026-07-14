@@ -23,6 +23,12 @@ _entity_chat_id = None
 # Keep messages under Telegram's 4096-char limit (tracebacks can be long).
 MAX_ALERT_LEN = 3500
 
+# Third-party libraries whose WARNING-level records are transient, self-healing
+# noise (e.g. urllib3's connection-retry notices). They stay in the file log but
+# are not mirrored to the Telegram topic, which is reserved for things worth a
+# look. ERROR+ from these libraries is still forwarded.
+NOISY_WARNING_PREFIXES = ("urllib3", "requests")
+
 
 def set_loop(loop):
     """Record the running bot loop; called once from ``app.main`` after start."""
@@ -64,10 +70,20 @@ async def _send(text, chat_id, topic_id):
 class TelegramAlertHandler(logging.Handler):
     """Forward WARNING+ log records to the configured Telegram alert topic."""
 
-    def emit(self, record):
+    @staticmethod
+    def _should_mirror(record):
+        """Whether this record is worth posting to the Telegram topic."""
         # Telethon logs network hiccups (including ones from our own send) under
         # its own namespace; skipping it prevents an error -> send -> error loop.
         if record.name.startswith("telethon"):
+            return False
+        # Transient third-party retry warnings are noise; keep only their ERROR+.
+        if record.levelno < logging.ERROR and record.name.startswith(NOISY_WARNING_PREFIXES):
+            return False
+        return True
+
+    def emit(self, record):
+        if not self._should_mirror(record):
             return
 
         chat_id = state.alert_chat_id
