@@ -13,6 +13,7 @@ from app.flows.protocol import CallbackContext
 from app.handlers.commands import start_handler
 from app.logging_setup import logger
 from app.models import Volunteer
+from app.translations import error_generic
 
 
 @bot.on(events.CallbackQuery())
@@ -24,6 +25,19 @@ async def callback_handler(event):
     except Exception:
         logging.debug("Could not answer callback query", exc_info=True)
 
+    try:
+        await _dispatch_callback(event)
+    except Exception:
+        # Let the user know their action failed (best-effort), then re-raise so
+        # the error still reaches the log / GlitchTip / Telegram alert topic.
+        try:
+            await event.respond(error_generic)
+        except Exception:
+            logging.debug("Could not notify user of callback error", exc_info=True)
+        raise
+
+
+async def _dispatch_callback(event):
     data = str(event.data.decode("utf-8"))
     user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
     today = datetime.now().date().strftime("%d.%m")

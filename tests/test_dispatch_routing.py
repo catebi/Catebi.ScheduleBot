@@ -135,3 +135,33 @@ async def test_unregistered_user_callback_is_still_answered(routing, make_event,
     await dispatch.callback_handler(event)
 
     assert any(s["method"] == "answer" for s in event.sent)
+
+
+async def test_callback_notifies_user_and_reraises_on_error(make_event, monkeypatch):
+    """When a flow raises, the user gets a generic notice AND the error still propagates."""
+    from app.translations import error_generic
+
+    monkeypatch.setattr(
+        dispatch, "Volunteer", types.SimpleNamespace(first=lambda **kw: types.SimpleNamespace(language="ru"))
+    )
+
+    async def boom(ctx):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(settings, "back", boom)
+
+    event = make_event(data="back")
+    with pytest.raises(RuntimeError, match="kaboom"):  # re-raised for the log / GlitchTip / alert topic
+        await dispatch.callback_handler(event)
+
+    assert any(s["method"] == "respond" and s["text"] == error_generic for s in event.sent)
+
+
+async def test_callback_no_generic_error_on_success(routing, make_event):
+    """The generic error notice must not appear on a normal callback."""
+    from app.translations import error_generic
+
+    event = make_event(data="back")
+    await dispatch.callback_handler(event)
+
+    assert not any(s.get("text") == error_generic for s in event.sent)

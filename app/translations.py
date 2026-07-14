@@ -367,6 +367,10 @@ error_custom_text = {
     "ru": "Ваше сообщение не может начинаться со слеша, пожалуйста, попробуйте еще раз.",
 }
 
+# Generic fallback shown when a callback handler fails unexpectedly. Bilingual
+# because the user's language may not be resolved at the point of failure.
+error_generic = "⚠️ Что-то пошло не так, попробуйте ещё раз.\n⚠️ Something went wrong, please try again."
+
 # region Topic message fragments
 # These plug into the *_topic_message templates above. The topic messages are
 # posted to shared Russian-language group topics, so call sites use the "ru"
