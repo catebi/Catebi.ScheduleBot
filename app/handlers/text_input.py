@@ -11,8 +11,9 @@ from telethon import Button, events
 
 from app import state
 from app.bot_client import bot
+from app.data.notification_repo import get_or_create_notification
 from app.logging_setup import logger
-from app.models import Notification
+from app.models import Volunteer
 from app.translations import (
     button_back,
     error_custom_text,
@@ -25,7 +26,8 @@ from app.translations import (
 async def custom_notifications_handler(event):
     logging.info(f"Custom text setting: {event.sender.id}, {event.message.message}")
 
-    admin = Notification.first(formula=match({"telegram_chat_id": event.sender.id}))
+    volunteer = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
+    admin = get_or_create_notification(event.sender.id, volunteer=volunteer, admin_curator=event.sender.username)
 
     custom_text = str(event.message.message)
     if custom_text.startswith("/"):

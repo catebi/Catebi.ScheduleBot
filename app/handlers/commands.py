@@ -89,7 +89,7 @@ async def help_handler(event):
 async def settings_handler(event, edit: bool = False):
     user = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
     if not user:
-        await event.respond(error_not_registered[user.language])
+        await event.respond(error_not_registered["en"])
         return
 
     current_settings = {"language": user.language, "view": user.schedule_view}
@@ -118,7 +118,7 @@ async def settings_handler(event, edit: bool = False):
 async def set_topic_handler(event):
     user = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
     if not user:
-        await event.respond(error_not_registered[user.language])
+        await event.respond(error_not_registered["en"])
         return
 
     if DUTY_ADMIN_CURATOR not in user.duties:
@@ -134,14 +134,17 @@ async def set_topic_handler(event):
         else "steril_cat"
     )
 
-    settings_topic_chat_id = Settings.first(formula=match({"key": "topic_chat_id"}))
-    if not settings_topic_chat_id.value:
-        settings_topic_chat_id.value = event.chat.id
-        settings_topic_chat_id.save()
+    topic_chat_setting = Settings.first(formula=match({"key": "topic_chat_id"})) or Settings(key="topic_chat_id")
+    if not topic_chat_setting.value:
+        topic_chat_setting.value = event.chat.id
+        topic_chat_setting.save()
 
-    settings_topic_id = Settings.first(formula=match({"key": f"{topic_type}_topic_id"}))
-    settings_topic_id.value = event.message.reply_to_msg_id
-    settings_topic_id.save()
+    # Store this topic's id (the message replied to). Create the row if needed.
+    topic_setting = Settings.first(formula=match({"key": f"{topic_type}_topic_id"})) or Settings(
+        key=f"{topic_type}_topic_id"
+    )
+    topic_setting.value = event.message.reply_to_msg_id
+    topic_setting.save()
 
     await bot.send_message(event.sender.id, f"{topic_type.capitalize()} topic set successfully.")
 

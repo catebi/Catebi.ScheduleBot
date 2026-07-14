@@ -3,3 +3,4 @@ pyairtable==3.4.0
 aiocron==2.1
 Babel==2.18.0
 requests==2.34.2
+python-dotenv==1.2.2

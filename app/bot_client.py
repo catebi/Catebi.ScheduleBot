@@ -15,7 +15,15 @@ from datetime import datetime
 from pyairtable import Api
 from telethon import TelegramClient
 
-from app.config import TIMEZONE, airtable_api_key, api_hash, api_id, bot_token
+from app.config import (
+    AIRTABLE_TIMEOUT,
+    SESSION_NAME,
+    TIMEZONE,
+    airtable_api_key,
+    api_hash,
+    api_id,
+    bot_token,
+)
 from app.logging_setup import setup_logging
 
 # Configure logging before anything (including the timezone line below) logs.
@@ -35,9 +43,9 @@ time.tzset()
 logging.info(f"Timezone set to {os.environ['TZ']}, time is {datetime.now()}.")
 
 # Raw Airtable API client for the sterilization base (used outside the ORM).
-sterilization_api = Api(api_key=airtable_api_key) if airtable_api_key else None
+sterilization_api = Api(api_key=airtable_api_key, timeout=AIRTABLE_TIMEOUT) if airtable_api_key else None
 
 # The Telegram bot client. Connect with ``await bot.start(bot_token=bot_token)``.
-bot = TelegramClient("ololo", api_id, api_hash)
+bot = TelegramClient(SESSION_NAME, api_id, api_hash)
 
 __all__ = ["bot", "sterilization_api", "bot_token"]

@@ -18,7 +18,8 @@ from app.constants import (
     DUTY_SHORT_STERIL,
     DUTY_STERIL,
 )
-from app.models import Notification, Volunteer
+from app.data.notification_repo import get_or_create_notification
+from app.models import Volunteer
 from app.text.dates import format_date_by_language
 from app.translations import (
     button_curator_ignore,
@@ -63,7 +64,7 @@ async def send_notifications(curator_id: int, category: str = "", target_date: d
     text_cleaning = text_medical = None
     if category != "steril":
         curator = Volunteer.first(formula=match({"telegram_chat_id": curator_id}))
-        settings = Notification.first(formula=match({"telegram_chat_id": curator_id}))
+        settings = get_or_create_notification(curator_id, volunteer=curator)
         text_cleaning = settings.custom_text_cleaning
         text_medical = settings.custom_text_medical
 

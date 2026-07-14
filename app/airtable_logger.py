@@ -1,4 +1,4 @@
-import asyncio
+import inspect
 import logging
 import threading
 import time
@@ -34,7 +34,7 @@ def airtable_context(name):
             finally:
                 _thread_local.context = None
 
-        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+        return async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
 
     return decorator
 
@@ -84,17 +84,17 @@ def log_airtable_request(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
+        status = "error"
+        error_msg = ""
         try:
             result = func(*args, **kwargs)
-            duration = time.time() - start_time
             status = "success"
             return result
         except Exception as e:
-            duration = time.time() - start_time
-            status = "error"
             error_msg = str(e)
             raise
         finally:
+            duration = time.time() - start_time
             context = getattr(_thread_local, "context", "Unknown")
             model_class = get_model_class(func, args)
             params = format_request_params(args, kwargs)
@@ -108,7 +108,7 @@ def log_airtable_request(func):
                 f"Status: {status}"
             )
 
-            if status == "error":
+            if status == "error" and error_msg:
                 log_msg += f" - Error: {error_msg}"
 
             logging.info(log_msg)

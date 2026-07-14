@@ -48,9 +48,15 @@ Requires Python 3.12+. Configuration is read from environment variables (see
 ## Development
 
 ```bash
+pip install -r requirements-dev.txt
 ruff check .        # lint
 ruff format .       # format
+pytest              # run tests
 ```
+
+Tests live in `tests/` and run fully offline (Telegram and Airtable are mocked):
+unit tests for the pure helpers and the callback dispatcher, plus handler/flow
+tests that drive the command and callback logic against fakes. No credentials needed.
 
 ## Deployment
 

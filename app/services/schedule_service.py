@@ -131,7 +131,7 @@ async def update_volunteers(step: str):
             logging.info(f"<{step}> Message ID is not set, creating a new message.")
             pin_message = await bot.send_message(state.topic_input_entity, _general_text(), reply_to=topic)
             await bot.pin_message(state.topic_input_entity, pin_message.id)
-            setting = Settings.first(formula=match({"key": setting_key}))
+            setting = Settings.first(formula=match({"key": setting_key})) or Settings(key=setting_key)
             setting.value = pin_message.id
             setting.save()
 
@@ -150,7 +150,7 @@ async def update_volunteers(step: str):
             if topic:
                 logging.info(f"<{step}> Re-pinning message {message_id} in topic {topic}")
                 await bot.pin_message(state.topic_input_entity, message_id)
-                setting = Settings.first(formula=match({"key": setting_key}))
+                setting = Settings.first(formula=match({"key": setting_key})) or Settings(key=setting_key)
                 setting.value = message_id
                 setting.save()
 

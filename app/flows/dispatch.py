@@ -27,6 +27,10 @@ async def callback_handler(event):
         await start_handler(event, check_user=True, language=lang)
         return
 
+    # Ignore callbacks from users not in the volunteer table (e.g. stale buttons).
+    if not user:
+        return
+
     language = user.language
     ctx = CallbackContext(event, data, user, language, today)
 

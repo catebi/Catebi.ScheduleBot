@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 # Importing app.bot_client configures logging (via setup_logging) and builds the client.
 from app.airtable_logger import patch_model_methods
@@ -21,7 +22,10 @@ def run():
     # Add request logging to the ORM models before any Airtable call happens.
     patch_model_methods()
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    try:
+        loop.run_until_complete(main())
+    except KeyboardInterrupt:
+        logging.info("Bot stopped (Ctrl+C).")
 
 
 if __name__ == "__main__":

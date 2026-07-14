@@ -1,6 +1,6 @@
 from pyairtable.orm import Model, fields
 
-from app.config import airtable_api_key, airtable_base_id
+from app.config import AIRTABLE_TIMEOUT, airtable_api_key, airtable_base_id
 
 
 class Volunteer(Model):
@@ -15,6 +15,7 @@ class Volunteer(Model):
         base_id = airtable_base_id
         table_name = "volunteer"
         api_key = airtable_api_key
+        timeout = AIRTABLE_TIMEOUT
 
 
 class Schedule(Model):
@@ -29,6 +30,7 @@ class Schedule(Model):
         base_id = airtable_base_id
         table_name = "schedule"
         api_key = airtable_api_key
+        timeout = AIRTABLE_TIMEOUT
 
 
 class Notification(Model):
@@ -45,6 +47,7 @@ class Notification(Model):
         base_id = airtable_base_id
         table_name = "notification"
         api_key = airtable_api_key
+        timeout = AIRTABLE_TIMEOUT
 
 
 class Settings(Model):
@@ -57,3 +60,4 @@ class Settings(Model):
         base_id = airtable_base_id
         table_name = "settings"
         api_key = airtable_api_key
+        timeout = AIRTABLE_TIMEOUT

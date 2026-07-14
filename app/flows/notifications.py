@@ -3,12 +3,11 @@
 import logging
 from datetime import datetime, timedelta
 
-from pyairtable.formulas import match
 from telethon import Button
 
 from app import state
 from app.constants import SCHEDULE_WINDOW_DAYS
-from app.models import Notification
+from app.data.notification_repo import get_or_create_notification
 from app.services.notification_service import send_notifications
 from app.services.schedule_service import show_loading_state
 from app.text.dates import format_date_by_language
@@ -55,19 +54,9 @@ async def open_menu(ctx):
     if action == "unset":
         state.custom_text_setting.pop(event.sender.id)
 
-    current_settings = Notification.first(
-        fields=["admin_curator", "notify_at", "custom_text_cleaning", "custom_text_medical", "date_threshold"],
-        formula=match({"telegram_chat_id": event.sender.id}),
+    current_settings = get_or_create_notification(
+        event.sender.id, volunteer=user, admin_curator=event.sender.username
     )
-    if not current_settings:
-        current_settings = Notification(
-            admin_curator=event.sender.username,
-            volunteer=user,
-            telegram_chat_id=event.sender.id,
-            notify_at="12:00",
-            date_threshold="+1",
-        )
-        current_settings.save()
 
     if action == "reset":
         if notif_type == "cleaning":
@@ -156,7 +145,7 @@ async def set_notify_at(ctx):
     event, language = ctx.event, ctx.language
     _, time_str = ctx.data.split(";")
     hour, minute = time_str.split(":")
-    admin = Notification.first(formula=match({"telegram_chat_id": event.sender.id}))
+    admin = get_or_create_notification(event.sender.id, volunteer=ctx.user, admin_curator=event.sender.username)
     admin.notify_at = f"{hour}:{minute}"
     admin.save()
     await event.edit(
@@ -176,7 +165,7 @@ async def open_date_threshold_menu(ctx):
 async def set_date_threshold(ctx):
     event, language = ctx.event, ctx.language
     _, day = ctx.data.split(";")
-    admin = Notification.first(formula=match({"telegram_chat_id": event.sender.id}))
+    admin = get_or_create_notification(event.sender.id, volunteer=ctx.user, admin_curator=event.sender.username)
     admin.date_threshold = day
     admin.save()
 
