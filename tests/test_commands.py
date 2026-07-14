@@ -13,6 +13,7 @@ from app.translations import (
     language_selection,
     main_menu_header,
     settings_overview,
+    settings_view,
 )
 
 
@@ -43,6 +44,17 @@ async def test_schedule_handler_shows_main_menu(make_event, user_factory, patch_
     assert "general_schedule" in data  # visible in "today" view
     assert "notifications;;" in data  # admin only
     assert "notifications_steril;;" in data
+
+
+async def test_schedule_handler_defaults_unset_view_to_today(make_event, user_factory, patch_volunteer, button_data):
+    """A volunteer with no schedule_view set gets the documented "today" view, not a crash/general."""
+    patch_volunteer(user_factory(language="ru", schedule_view=None, duties=["kk_cleaning"]))
+    event = make_event()
+
+    await commands.schedule_handler(event)
+
+    assert main_menu_header["ru"] in event.last_text  # "today" menu, not the general view
+    assert "general_schedule" in button_data(event.last["buttons"])  # button only shown in "today" view
 
 
 async def test_schedule_handler_non_admin_has_no_notifications(make_event, user_factory, patch_volunteer, button_data):
@@ -114,6 +126,17 @@ async def test_settings_handler(make_event, user_factory, patch_volunteer, butto
     assert event.last["method"] == "respond"
     assert event.last_text == settings_overview["ru"].format("🇷🇺 Русский", "Только сегодня")
     assert button_data(event.last["buttons"]) == ["change_language", "change_view;today"]
+
+
+async def test_settings_handler_defaults_unset_view(make_event, user_factory, patch_volunteer):
+    """A volunteer with no schedule_view set must not crash /settings (regression: KeyError: None)."""
+    patch_volunteer(user_factory(language="ru", schedule_view=None))
+    event = make_event()
+
+    await commands.settings_handler(event)  # must not raise
+
+    assert event.last["method"] == "respond"
+    assert settings_view["today"]["ru"] in event.last_text  # fell back to the "today" default
 
 
 async def test_set_topic_handler_rejects_non_admin(make_event, user_factory, patch_volunteer):

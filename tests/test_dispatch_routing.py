@@ -118,3 +118,20 @@ async def test_unregistered_user_callback_is_ignored(routing, make_event, monkey
 
     assert routing == []  # no flow handler invoked
 
+
+async def test_callback_is_answered_immediately(routing, make_event):
+    """The query is answered (before the flow runs) so a slow lookup can't expire it."""
+    event = make_event(data="back")
+    await dispatch.callback_handler(event)
+    # First recorded action is the answer, ahead of any flow's edit/respond.
+    assert event.sent and event.sent[0]["method"] == "answer"
+
+
+async def test_unregistered_user_callback_is_still_answered(routing, make_event, monkeypatch):
+    """Even a stale button from a non-volunteer gets its spinner stopped."""
+    monkeypatch.setattr(dispatch, "Volunteer", types.SimpleNamespace(first=lambda **kw: None))
+
+    event = make_event(data="back")
+    await dispatch.callback_handler(event)
+
+    assert any(s["method"] == "answer" for s in event.sent)

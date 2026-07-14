@@ -50,6 +50,9 @@ class FakeEvent:
         self.sent.append({"method": method, "text": text, "buttons": buttons})
         return types.SimpleNamespace(id=999, message=text, buttons=buttons, entities=None)
 
+    async def answer(self, message=None, **kw):
+        return await self._record("answer", message, None)
+
     async def edit(self, text, buttons=None, **kw):
         return await self._record("edit", text, buttons)
 

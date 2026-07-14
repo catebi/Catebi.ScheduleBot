@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from pyairtable.formulas import match
@@ -18,6 +19,11 @@ from app.models import Volunteer
 @logger
 @airtable_context("callback_handler")
 async def callback_handler(event):
+    try:
+        await event.answer()
+    except Exception:
+        logging.debug("Could not answer callback query", exc_info=True)
+
     data = str(event.data.decode("utf-8"))
     user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
     today = datetime.now().date().strftime("%d.%m")

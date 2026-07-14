@@ -93,7 +93,7 @@ async def settings_handler(event, edit: bool = False):
         await event.respond(error_not_registered["en"])
         return
 
-    current_settings = {"language": user.language, "view": user.schedule_view}
+    current_settings = {"language": user.language or "en", "view": user.schedule_view or "today"}
 
     buttons = [
         [Button.inline(button_change_language[current_settings["language"]], data="change_language")],
@@ -224,7 +224,7 @@ async def schedule_handler(event, language: str = "en", update: bool = False, vi
         return
 
     language = user.language if user else "en"
-    view = user.schedule_view
+    view = user.schedule_view or "today"  # unset schedule_view falls back to the documented default
     admin_flag = DUTY_ADMIN_CURATOR in user.duties
 
     buttons = [
