@@ -33,7 +33,11 @@ async def test_update_volunteers_creates_missing_pin_settings(monkeypatch):
     FakeSettings.created = []
     monkeypatch.setattr(svc, "Schedule", FakeSchedule)
     monkeypatch.setattr(svc, "Settings", FakeSettings)
-    monkeypatch.setattr(svc, "load_settings", lambda: {"topic_chat_id": 123})
+
+    async def _load_settings():
+        return {"topic_chat_id": 123}
+
+    monkeypatch.setattr(svc, "load_settings", _load_settings)
 
     async def _resolve(_chat_id):
         return "ENTITY"

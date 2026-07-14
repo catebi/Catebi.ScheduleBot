@@ -3,7 +3,7 @@
 from app.data import notification_repo as repo
 
 
-def test_returns_existing_when_present(monkeypatch):
+async def test_returns_existing_when_present(monkeypatch):
     existing = object()
 
     class FakeNotification:
@@ -12,10 +12,10 @@ def test_returns_existing_when_present(monkeypatch):
             return existing
 
     monkeypatch.setattr(repo, "Notification", FakeNotification)
-    assert repo.get_or_create_notification(1) is existing
+    assert await repo.get_or_create_notification(1) is existing
 
 
-def test_creates_with_defaults_when_missing(monkeypatch):
+async def test_creates_with_defaults_when_missing(monkeypatch):
     created = {}
 
     class FakeNotification:
@@ -31,7 +31,7 @@ def test_creates_with_defaults_when_missing(monkeypatch):
 
     monkeypatch.setattr(repo, "Notification", FakeNotification)
 
-    result = repo.get_or_create_notification(42, admin_curator="bob")
+    result = await repo.get_or_create_notification(42, admin_curator="bob")
 
     assert isinstance(result, FakeNotification)
     assert created["kwargs"]["telegram_chat_id"] == 42

@@ -5,6 +5,7 @@ from telethon import events
 
 from app.airtable_logger import airtable_context
 from app.bot_client import bot
+from app.data.airtable_async import run_airtable
 from app.flows import notifications, settings
 from app.flows import schedule as schedule_flow
 from app.flows.protocol import CallbackContext
@@ -18,7 +19,7 @@ from app.models import Volunteer
 @airtable_context("callback_handler")
 async def callback_handler(event):
     data = str(event.data.decode("utf-8"))
-    user = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
+    user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
     today = datetime.now().date().strftime("%d.%m")
 
     # Change user's language (handled before the language is resolved below).

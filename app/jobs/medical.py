@@ -15,6 +15,7 @@ from app.constants import (
     SOFTR_REQUEST_DETAILS_URL,
     UNKNOWN_DAYS_SORT_KEY,
 )
+from app.data.airtable_async import run_airtable
 from app.data.catflat_repo import (
     FIELDS_MEDICAL,
     active_cats_formula,
@@ -93,7 +94,7 @@ def _cat_attention_entry(record, today):
     return request_id_num, room, entry
 
 
-def _todays_medical_duty():
+async def _todays_medical_duty():
     """Return the 'дежурный медухода' line for today."""
     today_start = datetime.now().replace(
         hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.now().astimezone().tzinfo
@@ -102,7 +103,7 @@ def _todays_medical_duty():
         hour=23, minute=59, second=59, microsecond=999999, tzinfo=datetime.now().astimezone().tzinfo
     )
     formula = AND(GTE(Field("date"), today_start), LTE(Field("date"), today_end), match({"type": "medical"}))
-    today_schedules = Schedule.all(formula=formula, fields=["date", "telegram", "type"])
+    today_schedules = await run_airtable(Schedule.all, formula=formula, fields=["date", "telegram", "type"])
 
     if today_schedules:
         schedule = today_schedules[0]
@@ -116,7 +117,7 @@ def _todays_medical_duty():
 @aiocron.crontab("00 11 * * *")  # every day at 11:00
 @airtable_context("daily_medical_notification")
 async def send_daily_medical_notification():
-    settings_dict = load_settings()
+    settings_dict = await load_settings()
     if not settings_dict.get("topic_chat_id") or not settings_dict.get("medical_topic_id"):
         logging.error("Topic chat ID or medical topic ID is not set, skipping daily medical notification.")
         return
@@ -134,7 +135,7 @@ async def send_daily_medical_notification():
         return
 
     try:
-        records = cat_flat_table().all(formula=str(active_cats_formula()), fields=FIELDS_MEDICAL)
+        records = await run_airtable(cat_flat_table().all, formula=str(active_cats_formula()), fields=FIELDS_MEDICAL)
 
         # Group cats needing attention by room: {room: [(request_id_num, entry), ...]}.
         cats_by_room = {}
@@ -160,7 +161,7 @@ async def send_daily_medical_notification():
             if i < len(sorted_rooms) - 1:
                 cats_needing_attention.append("")
 
-        duty_info = _todays_medical_duty()
+        duty_info = await _todays_medical_duty()
 
         if cats_needing_attention:
             message = medical_attention_header[_LANG] + "\n\n" + "\n".join(cats_needing_attention) + f"\n\n{duty_info}"

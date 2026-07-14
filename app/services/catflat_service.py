@@ -14,6 +14,7 @@ from app.constants import (
     SOFTR_REQUEST_DETAILS_URL,
     UNKNOWN_DAYS_SORT_KEY,
 )
+from app.data.airtable_async import run_airtable
 from app.data.catflat_repo import fetch_cat_flat_records
 from app.models import Schedule
 from app.text.dates import parse_airtable_date
@@ -48,7 +49,7 @@ def _traffic_light(days: int) -> str:
     return "🔴"
 
 
-def _todays_schedule_summary():
+async def _todays_schedule_summary():
     """Build the '🧹 уборка / 🏥 медуход сегодня' lines appended to the overview."""
     tz = datetime.now().astimezone().tzinfo
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=tz)
@@ -59,7 +60,7 @@ def _todays_schedule_summary():
         LTE(Field("date"), today_end),
         OR(match({"type": "medical"}), match({"type": "cleaning"})),
     )
-    today_schedules = Schedule.all(formula=schedule_formula, fields=["date", "telegram", "type"])
+    today_schedules = await run_airtable(Schedule.all, formula=schedule_formula, fields=["date", "telegram", "type"])
 
     cleaning = []
     medical = []
@@ -212,7 +213,7 @@ async def build_cat_flat_overview():
 
     # Append today's schedule summary (medical + cleaning).
     try:
-        message = message + "\n\n" + "\n".join(_todays_schedule_summary())
+        message = message + "\n\n" + "\n".join(await _todays_schedule_summary())
     except Exception as err:
         logging.error(f"Error building catflat schedule summary: {err}", exc_info=True)
 

@@ -15,6 +15,7 @@ from app import state
 from app.airtable_logger import airtable_context
 from app.bot_client import bot
 from app.constants import SUPERGROUP_ID_PREFIX, TYPE_STERIL_ACCEPTANCE
+from app.data.airtable_async import run_airtable
 from app.data.coerce import to_local
 from app.data.settings_repo import load_settings, resolve_topic_entity
 from app.models import Schedule, Settings
@@ -41,7 +42,8 @@ def _schedule_entry(shift):
 @airtable_context("update_volunteers")
 async def update_volunteers(step: str):
     """Refresh cached schedule views and the pinned topic messages."""
-    state.scheduled_dates = Schedule.all(
+    state.scheduled_dates = await run_airtable(
+        Schedule.all,
         fields=["date", "volunteer", "telegram", "type"],
         sort=["date"],
         formula=match(
@@ -82,7 +84,7 @@ async def update_volunteers(step: str):
     logging.info(f"<{step}> Volunteers list and schedule updated.")
 
     # Update pinned messages in the group topics.
-    settings_dict = load_settings()
+    settings_dict = await load_settings()
 
     if not settings_dict.get("topic_chat_id"):
         logging.error(f"<{step}> Topic chat ID is not set, please set it in the settings.")
@@ -131,9 +133,11 @@ async def update_volunteers(step: str):
             logging.info(f"<{step}> Message ID is not set, creating a new message.")
             pin_message = await bot.send_message(state.topic_input_entity, _general_text(), reply_to=topic)
             await bot.pin_message(state.topic_input_entity, pin_message.id)
-            setting = Settings.first(formula=match({"key": setting_key})) or Settings(key=setting_key)
+            setting = await run_airtable(Settings.first, formula=match({"key": setting_key})) or Settings(
+                key=setting_key
+            )
             setting.value = pin_message.id
-            setting.save()
+            await run_airtable(setting.save)
 
     # Edit existing pinned messages (skip on startup).
     if step != "startup":
@@ -150,8 +154,10 @@ async def update_volunteers(step: str):
             if topic:
                 logging.info(f"<{step}> Re-pinning message {message_id} in topic {topic}")
                 await bot.pin_message(state.topic_input_entity, message_id)
-                setting = Settings.first(formula=match({"key": setting_key})) or Settings(key=setting_key)
+                setting = await run_airtable(Settings.first, formula=match({"key": setting_key})) or Settings(
+                    key=setting_key
+                )
                 setting.value = message_id
-                setting.save()
+                await run_airtable(setting.save)
 
     logging.info(f"<{step}> Messages in topics updated.")

@@ -11,6 +11,7 @@ from telethon import Button, events
 
 from app import state
 from app.bot_client import bot
+from app.data.airtable_async import run_airtable
 from app.data.notification_repo import get_or_create_notification
 from app.logging_setup import logger
 from app.models import Volunteer
@@ -26,8 +27,8 @@ from app.translations import (
 async def custom_notifications_handler(event):
     logging.info(f"Custom text setting: {event.sender.id}, {event.message.message}")
 
-    volunteer = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
-    admin = get_or_create_notification(event.sender.id, volunteer=volunteer, admin_curator=event.sender.username)
+    volunteer = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
+    admin = await get_or_create_notification(event.sender.id, volunteer=volunteer, admin_curator=event.sender.username)
 
     custom_text = str(event.message.message)
     if custom_text.startswith("/"):
@@ -45,7 +46,7 @@ async def custom_notifications_handler(event):
         admin.custom_text_cleaning = custom_text
     elif pending["type"] == "medical":
         admin.custom_text_medical = custom_text
-    admin.save()
+    await run_airtable(admin.save)
 
     prompt = pending["prompt"]
     await prompt.edit(prompt.message, buttons=None)  # remove buttons to avoid repeat clicks

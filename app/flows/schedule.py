@@ -17,6 +17,7 @@ from app.constants import (
     TYPE_STERIL_ACCEPTANCE,
     TYPE_STERIL_RELEASE,
 )
+from app.data.airtable_async import run_airtable
 from app.data.coerce import to_local
 from app.models import Schedule
 from app.services.schedule_service import show_loading_state, update_volunteers
@@ -141,8 +142,8 @@ async def new_schedule(ctx):
         }
     logging.info(f"Available dates: {available_dates}")
 
-    state.scheduled_dates = Schedule.all(
-        fields=["date", "type"], formula=match({"date": (">=", datetime.now().date())}), sort=["date"]
+    state.scheduled_dates = await run_airtable(
+        Schedule.all, fields=["date", "type"], formula=match({"date": (">=", datetime.now().date())}), sort=["date"]
     )
     for entry in state.scheduled_dates:
         entry.date = to_local(entry.date)
@@ -151,7 +152,9 @@ async def new_schedule(ctx):
             available_dates[entry.date.date()][entry.type] += 1
 
     # Hide dates the user already signed up for (for this shift type).
-    user_scheduled_dates = Schedule.all(fields=["date", "type"], formula=match({"telegram_chat_id": event.sender.id}))
+    user_scheduled_dates = await run_airtable(
+        Schedule.all, fields=["date", "type"], formula=match({"telegram_chat_id": event.sender.id})
+    )
     for entry in user_scheduled_dates:
         entry.date = to_local(entry.date)
         if entry.date.date() in available_dates and entry.type == shift_type:
@@ -217,13 +220,14 @@ async def add_schedule(ctx):
         time_str = "00:00"
 
     date = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M").astimezone(datetime.now().astimezone().tzinfo)
-    Schedule(
+    new_shift = Schedule(
         telegram_chat_id=event.sender.id,
         date=date,
         telegram="@" + str(event.sender.username).lower(),
         volunteer=user,
         type=shift_type,
-    ).save()
+    )
+    await run_airtable(new_shift.save)
     await update_volunteers("add_schedule")
 
     if shift_type == TYPE_STERIL_ACCEPTANCE:
@@ -285,7 +289,8 @@ async def my_schedule(ctx):
     event, language = ctx.event, ctx.language
     await show_loading_state(event, language)
 
-    state.scheduled_dates = Schedule.all(
+    state.scheduled_dates = await run_airtable(
+        Schedule.all,
         fields=["date", "type"],
         formula=match({"telegram_chat_id": event.sender.id, "date": (">=", datetime.now().date())}),
         sort=["date"],
@@ -341,11 +346,11 @@ async def delete_schedule(ctx):
     _, date_str, shift_type = ctx.data.split(";")
     date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S").astimezone(datetime.now().astimezone().tzinfo)
 
-    unwanted_schedule = Schedule.first(
-        formula=match({"telegram_chat_id": event.sender.id, "date": date, "type": shift_type})
+    unwanted_schedule = await run_airtable(
+        Schedule.first, formula=match({"telegram_chat_id": event.sender.id, "date": date, "type": shift_type})
     )
     if unwanted_schedule:
-        unwanted_schedule.delete()
+        await run_airtable(unwanted_schedule.delete)
     else:
         logging.error(f"Record not found: {event.sender.id}, {date}, {shift_type}; probably already deleted.")
     await update_volunteers("delete_schedule")

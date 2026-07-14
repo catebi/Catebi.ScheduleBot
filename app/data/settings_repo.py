@@ -2,11 +2,13 @@ from telethon import utils
 
 from app.bot_client import bot
 from app.constants import SUPERGROUP_ID_PREFIX
+from app.data.airtable_async import run_airtable
 from app.models import Settings
 
 
-def load_settings() -> dict:
-    return {setting.key: setting.value for setting in Settings.all()}
+async def load_settings() -> dict:
+    settings = await run_airtable(Settings.all)
+    return {setting.key: setting.value for setting in settings}
 
 
 async def resolve_topic_entity(topic_chat_id):

@@ -10,6 +10,7 @@ from telethon import Button
 from app.airtable_logger import airtable_context
 from app.bot_client import bot
 from app.constants import DUTY_ADMIN_CURATOR
+from app.data.airtable_async import run_airtable
 from app.logging_setup import logger
 from app.models import Notification, Schedule, Volunteer
 from app.services.schedule_service import update_volunteers
@@ -37,14 +38,14 @@ async def daily_schedule_update():
 @airtable_context("send_curator_notifications")
 async def send_curator_notifications():
     """Notify each curator, at their configured time, of the nearest empty date."""
-    volunteers = Volunteer.all(fields=["telegram", "telegram_chat_id", "duty_codes", "language"])
+    volunteers = await run_airtable(Volunteer.all, fields=["telegram", "telegram_chat_id", "duty_codes", "language"])
     curators = [v for v in volunteers if DUTY_ADMIN_CURATOR in v.duties]
     if not curators:
         return
 
     # Fetch all curator notification settings in one query.
     curator_matches = [match({"telegram_chat_id": c.telegram_chat_id}) for c in curators]
-    all_curator_settings = Notification.all(formula=OR(*curator_matches)) if curator_matches else []
+    all_curator_settings = await run_airtable(Notification.all, formula=OR(*curator_matches)) if curator_matches else []
     curator_settings_map = {s.telegram_chat_id: s for s in all_curator_settings}
 
     for curator in curators:
@@ -72,7 +73,7 @@ async def send_curator_notifications():
                 GTE(Field("date"), date.replace(hour=0, minute=0, second=0, microsecond=0)),
                 LTE(Field("date"), date.replace(hour=23, minute=59, second=59, microsecond=999999)),
             )
-            schedules = Schedule.all(formula=formula, fields=["type"])
+            schedules = await run_airtable(Schedule.all, formula=formula, fields=["type"])
 
             buttons = []
             text = ""

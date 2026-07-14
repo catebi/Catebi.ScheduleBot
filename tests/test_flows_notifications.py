@@ -25,10 +25,13 @@ class FakeNotification:
 
 @pytest.fixture
 def patch_notification(monkeypatch):
-    """Make get_or_create_notification return a provided FakeNotification."""
+    """Make get_or_create_notification (async) return a provided FakeNotification."""
 
     def _install(notification):
-        monkeypatch.setattr(notif, "get_or_create_notification", lambda *a, **k: notification)
+        async def _get(*a, **k):
+            return notification
+
+        monkeypatch.setattr(notif, "get_or_create_notification", _get)
         return notification
 
     return _install

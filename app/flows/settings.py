@@ -1,6 +1,7 @@
 from telethon import Button
 
 from app import state
+from app.data.airtable_async import run_airtable
 from app.handlers.commands import schedule_handler, settings_handler, start_handler
 from app.translations import (
     button_back,
@@ -30,7 +31,7 @@ async def change_view_to(ctx):
     event, user, language = ctx.event, ctx.user, ctx.language
     _, new_view = ctx.data.split(";")
     user.schedule_view = new_view
-    user.save()
+    await run_airtable(user.save)
 
     await event.edit(
         settings_view_success[language].format(settings_view[new_view][language]),

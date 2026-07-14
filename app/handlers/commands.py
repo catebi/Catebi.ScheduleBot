@@ -20,6 +20,7 @@ from app.constants import (
     TYPE_STERIL_ACCEPTANCE,
     TYPE_STERIL_RELEASE,
 )
+from app.data.airtable_async import run_airtable
 from app.logging_setup import logger
 from app.models import Settings, Volunteer
 from app.services.catflat_service import build_cat_flat_overview
@@ -58,13 +59,13 @@ async def start_handler(event, check_user: bool = False, language: str = "en"):
         await event.edit(language_selection[language], buttons=buttons)
         return
 
-    user = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
+    user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
     if not user:
         await event.edit(error_not_registered[language])
         return
 
     user.language = language
-    user.save()
+    await run_airtable(user.save)
 
     await schedule_handler(event, language, update=True)
 
@@ -73,7 +74,7 @@ async def start_handler(event, check_user: bool = False, language: str = "en"):
 @logger
 @airtable_context("help_handler")
 async def help_handler(event):
-    user = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
+    user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
     language = user.language if user else "en"
     version_info = f"🤖 Bot Version: `{version}`"
 
@@ -87,7 +88,7 @@ async def help_handler(event):
 @bot.on(events.NewMessage(pattern="/settings", func=lambda e: e.is_private))  # private chat only
 @logger
 async def settings_handler(event, edit: bool = False):
-    user = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
+    user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
     if not user:
         await event.respond(error_not_registered["en"])
         return
@@ -116,7 +117,7 @@ async def settings_handler(event, edit: bool = False):
 @bot.on(events.NewMessage(pattern="/set_cleaning_topic|/set_medical_topic|/set_steril_cat_topic"))
 @logger
 async def set_topic_handler(event):
-    user = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
+    user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
     if not user:
         await event.respond(error_not_registered["en"])
         return
@@ -134,17 +135,19 @@ async def set_topic_handler(event):
         else "steril_cat"
     )
 
-    topic_chat_setting = Settings.first(formula=match({"key": "topic_chat_id"})) or Settings(key="topic_chat_id")
+    topic_chat_setting = await run_airtable(Settings.first, formula=match({"key": "topic_chat_id"})) or Settings(
+        key="topic_chat_id"
+    )
     if not topic_chat_setting.value:
         topic_chat_setting.value = event.chat.id
-        topic_chat_setting.save()
+        await run_airtable(topic_chat_setting.save)
 
     # Store this topic's id (the message replied to). Create the row if needed.
-    topic_setting = Settings.first(formula=match({"key": f"{topic_type}_topic_id"})) or Settings(
+    topic_setting = await run_airtable(Settings.first, formula=match({"key": f"{topic_type}_topic_id"})) or Settings(
         key=f"{topic_type}_topic_id"
     )
     topic_setting.value = event.message.reply_to_msg_id
-    topic_setting.save()
+    await run_airtable(topic_setting.save)
 
     await bot.send_message(event.sender.id, f"{topic_type.capitalize()} topic set successfully.")
 
@@ -168,7 +171,7 @@ def _duties_code(user) -> str:
 async def schedule_handler(event, language: str = "en", update: bool = False, view: str = "today"):
     today = datetime.now().date().strftime("%d.%m")
 
-    user = Volunteer.first(formula=match({"telegram_chat_id": event.sender.id}))
+    user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
     if not user:
         await event.respond(error_not_registered[language])
         return

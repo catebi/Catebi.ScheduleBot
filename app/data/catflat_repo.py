@@ -11,6 +11,7 @@ from app.constants import (
     DEPARTED_FETCH_CHUNK_SIZE,
     NO_ROOM,
 )
+from app.data.airtable_async import run_airtable
 from app.data.coerce import coerce_lookup, coerce_text
 
 # Fields fetched for the overview / changes comparison (full set).
@@ -68,7 +69,8 @@ async def fetch_cat_flat_records():
         return []
 
     try:
-        records = cat_flat_table().all(
+        records = await run_airtable(
+            cat_flat_table().all,
             formula=str(active_cats_formula()),
             fields=FIELDS_OVERVIEW,
         )
@@ -100,7 +102,7 @@ async def fetch_cat_flat_records():
         return []
 
 
-def fetch_departed_status_notes(departed_ids):
+async def fetch_departed_status_notes(departed_ids):
     result = {}
     if not (departed_ids and is_configured()):
         return result
@@ -109,7 +111,7 @@ def fetch_departed_status_notes(departed_ids):
     for i in range(0, len(departed_ids), DEPARTED_FETCH_CHUNK_SIZE):
         chunk = departed_ids[i : i + DEPARTED_FETCH_CHUNK_SIZE]
         formula_str = "OR(" + ",".join([f"RECORD_ID()='{rid}'" for rid in chunk]) + ")"
-        records = table.all(formula=formula_str, fields=["status", "notes_kk"])
+        records = await run_airtable(table.all, formula=formula_str, fields=["status", "notes_kk"])
         for rec in records:
             rid = rec.get("id")
             if not rid:

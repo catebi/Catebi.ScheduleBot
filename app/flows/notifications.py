@@ -7,6 +7,7 @@ from telethon import Button
 
 from app import state
 from app.constants import SCHEDULE_WINDOW_DAYS
+from app.data.airtable_async import run_airtable
 from app.data.notification_repo import get_or_create_notification
 from app.services.notification_service import send_notifications
 from app.services.schedule_service import show_loading_state
@@ -54,7 +55,7 @@ async def open_menu(ctx):
     if action == "unset":
         state.custom_text_setting.pop(event.sender.id)
 
-    current_settings = get_or_create_notification(
+    current_settings = await get_or_create_notification(
         event.sender.id, volunteer=user, admin_curator=event.sender.username
     )
 
@@ -63,7 +64,7 @@ async def open_menu(ctx):
             current_settings.custom_text_cleaning = ""
         elif notif_type == "medical":
             current_settings.custom_text_medical = ""
-        current_settings.save()
+        await run_airtable(current_settings.save)
         state.custom_text_setting.pop(event.sender.id)
 
     buttons = [
@@ -145,9 +146,9 @@ async def set_notify_at(ctx):
     event, language = ctx.event, ctx.language
     _, time_str = ctx.data.split(";")
     hour, minute = time_str.split(":")
-    admin = get_or_create_notification(event.sender.id, volunteer=ctx.user, admin_curator=event.sender.username)
+    admin = await get_or_create_notification(event.sender.id, volunteer=ctx.user, admin_curator=event.sender.username)
     admin.notify_at = f"{hour}:{minute}"
-    admin.save()
+    await run_airtable(admin.save)
     await event.edit(
         notifications_settings_notify_at_success[language].format(f"{hour}:{minute}"),
         buttons=[Button.inline(button_back[language], data="notifications;;")],
@@ -165,9 +166,9 @@ async def open_date_threshold_menu(ctx):
 async def set_date_threshold(ctx):
     event, language = ctx.event, ctx.language
     _, day = ctx.data.split(";")
-    admin = get_or_create_notification(event.sender.id, volunteer=ctx.user, admin_curator=event.sender.username)
+    admin = await get_or_create_notification(event.sender.id, volunteer=ctx.user, admin_curator=event.sender.username)
     admin.date_threshold = day
-    admin.save()
+    await run_airtable(admin.save)
 
     day_variation = {
         "en": "days" if int(day) > 1 else "day",

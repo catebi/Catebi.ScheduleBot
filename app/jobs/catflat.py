@@ -32,7 +32,7 @@ _LANG = "ru"
 @aiocron.crontab("00 10 * * *")  # every day at 10:00
 @airtable_context("daily_cat_flat_status_notification")
 async def send_daily_cat_flat_status_notification():
-    settings_dict = load_settings()
+    settings_dict = await load_settings()
     if not settings_dict.get("process_notification_topic_id"):
         logging.error("Process notification topic ID is not set, skipping daily cat flat status notification.")
         return
@@ -92,7 +92,7 @@ def _load_previous_state():
         return None, changes_bad_prev_state[_LANG]
 
 
-def _diff_cats(prev_cats, current_cats):
+async def _diff_cats(prev_cats, current_cats):
     """Categorize changes between snapshots.
 
     Returns (new_cats, departed_cats, status_changes, medical_changes).
@@ -102,7 +102,7 @@ def _diff_cats(prev_cats, current_cats):
     # For departed cats, fetch their current status/notes from Airtable.
     departed_ids = [rid for rid in prev_cats.keys() if rid not in current_cats]
     try:
-        departed_current_map = fetch_departed_status_notes(departed_ids)
+        departed_current_map = await fetch_departed_status_notes(departed_ids)
     except Exception as fetch_err:
         logging.warning(f"Could not batch fetch departed cats status/notes: {fetch_err}")
         departed_current_map = {}
@@ -178,7 +178,7 @@ def _build_changes_message(new_cats, departed_cats, status_changes, medical_chan
 @aiocron.crontab("00 22 * * *")  # every day at 22:00 (10 PM)
 @airtable_context("daily_cat_flat_changes_notification")
 async def send_daily_cat_flat_changes_notification():
-    settings_dict = load_settings()
+    settings_dict = await load_settings()
     if not settings_dict.get("process_notification_topic_id"):
         logging.error("Process notification topic ID is not set, skipping daily cat flat changes notification.")
         return
@@ -222,7 +222,7 @@ async def send_daily_cat_flat_changes_notification():
             for cat_data in current_normalized_cats
         }
 
-        new_cats, departed_cats, status_changes, medical_changes = _diff_cats(prev_cats, current_cats)
+        new_cats, departed_cats, status_changes, medical_changes = await _diff_cats(prev_cats, current_cats)
         message = _build_changes_message(new_cats, departed_cats, status_changes, medical_changes)
 
         await bot.send_message(

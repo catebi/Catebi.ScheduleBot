@@ -1,6 +1,6 @@
+import contextvars
 import inspect
 import logging
-import threading
 import time
 from functools import wraps
 
@@ -10,8 +10,7 @@ from app.models import Notification, Schedule, Settings, Volunteer
 
 # Logging is configured centrally in app.logging_setup (imported by the entrypoint).
 
-# Thread-local storage for context
-_thread_local = threading.local()
+_context = contextvars.ContextVar("airtable_context", default="Unknown")
 
 
 def airtable_context(name):
@@ -20,19 +19,19 @@ def airtable_context(name):
     def decorator(func):
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
-            _thread_local.context = name
+            token = _context.set(name)
             try:
                 return await func(*args, **kwargs)
             finally:
-                _thread_local.context = None
+                _context.reset(token)
 
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
-            _thread_local.context = name
+            token = _context.set(name)
             try:
                 return func(*args, **kwargs)
             finally:
-                _thread_local.context = None
+                _context.reset(token)
 
         return async_wrapper if inspect.iscoroutinefunction(func) else sync_wrapper
 
@@ -95,7 +94,7 @@ def log_airtable_request(func):
             raise
         finally:
             duration = time.time() - start_time
-            context = getattr(_thread_local, "context", "Unknown")
+            context = _context.get()
             model_class = get_model_class(func, args)
             params = format_request_params(args, kwargs)
 

@@ -18,6 +18,7 @@ from app.constants import (
     DUTY_SHORT_STERIL,
     DUTY_STERIL,
 )
+from app.data.airtable_async import run_airtable
 from app.data.notification_repo import get_or_create_notification
 from app.models import Volunteer
 from app.text.dates import format_date_by_language
@@ -58,13 +59,13 @@ def _duties_code(volunteer) -> str:
 @airtable_context("send_notifications")
 async def send_notifications(curator_id: int, category: str = "", target_date: datetime = None):
     """Notify eligible volunteers. Returns (total_eligible, notifications_sent)."""
-    volunteers = Volunteer.all(fields=["telegram_chat_id", "language", "duty_codes"])
+    volunteers = await run_airtable(Volunteer.all, fields=["telegram_chat_id", "language", "duty_codes"])
     notifiable_volunteers = _notifiable_volunteers(volunteers, category)
 
     text_cleaning = text_medical = None
     if category != "steril":
-        curator = Volunteer.first(formula=match({"telegram_chat_id": curator_id}))
-        settings = get_or_create_notification(curator_id, volunteer=curator)
+        curator = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": curator_id}))
+        settings = await get_or_create_notification(curator_id, volunteer=curator)
         text_cleaning = settings.custom_text_cleaning
         text_medical = settings.custom_text_medical
 
