@@ -39,11 +39,14 @@ def test_adapter_keeps_explicit_timeout(monkeypatch):
     assert captured["timeout"] == 5
 
 
-def test_apply_timeout_mounts_adapter_and_preserves_retries():
+def test_apply_timeout_mounts_adapter_with_bounded_retry():
     from pyairtable import Api
 
+    from app.data.airtable_timeout import AIRTABLE_RETRY
+
     api = Api("dummy", timeout=(1, 1))
-    original_retries = api.session.get_adapter("https://").max_retries
+    # pyairtable's default is the aggressive total=5, retry-every-method policy.
+    assert api.session.get_adapter("https://").max_retries.total == 5
 
     apply_timeout(api, (7, 8))
 
@@ -51,8 +54,11 @@ def test_apply_timeout_mounts_adapter_and_preserves_retries():
         adapter = api.session.get_adapter(scheme)
         assert isinstance(adapter, TimeoutHTTPAdapter)
         assert adapter._timeout == (7, 8)
-        # Retry strategy pyairtable configured must survive the remount.
-        assert adapter.max_retries == original_retries
+        assert adapter.max_retries is AIRTABLE_RETRY
+        assert adapter.max_retries.total == 2
+        # Writes must never be replayed (no duplicate create/update).
+        assert "POST" not in adapter.max_retries.allowed_methods
+        assert "PATCH" not in adapter.max_retries.allowed_methods
 
 
 def test_apply_timeout_ignores_none():

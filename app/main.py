@@ -1,10 +1,12 @@
 import asyncio
+import inspect
 import logging
 
 # Importing app.bot_client configures logging (via setup_logging) and builds the client.
 from app import alerts
 from app.airtable_logger import patch_model_methods
 from app.bot_client import bot, bot_token
+from app.data.airtable_async import shutdown_executor
 from app.data.airtable_timeout import install_airtable_timeout
 from app.flows import dispatch  # noqa: F401
 
@@ -35,6 +37,14 @@ def run():
         loop.run_until_complete(main())
     except KeyboardInterrupt:
         logging.info("Bot stopped (Ctrl+C).")
+    finally:
+        try:
+            result = bot.disconnect()
+            if inspect.isawaitable(result):
+                loop.run_until_complete(result)
+        except Exception:
+            logging.warning("Error while disconnecting the bot on shutdown.", exc_info=True)
+        shutdown_executor()
 
 
 if __name__ == "__main__":

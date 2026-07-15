@@ -31,7 +31,7 @@ glitchtip_traces_sample_rate = float(os.getenv("GLITCHTIP_TRACES_SAMPLE_RATE", "
 
 SESSION_NAME = os.getenv("SESSION_NAME", "catebi")
 
-AIRTABLE_TIMEOUT = (10, 30)
+AIRTABLE_TIMEOUT = (10, 20)
 
 # Timezone the bot operates in (all schedule times are interpreted in it).
 TIMEZONE = "Asia/Tbilisi"

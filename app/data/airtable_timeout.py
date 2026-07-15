@@ -3,9 +3,21 @@
 import logging
 
 from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from app.config import AIRTABLE_TIMEOUT
 from app.models import Notification, Schedule, Settings, Volunteer
+
+AIRTABLE_RETRY = Retry(
+    total=2,
+    connect=2,
+    read=1,
+    status=2,
+    backoff_factor=0.3,
+    status_forcelist=(429, 500, 502, 503, 504),
+    allowed_methods=frozenset({"GET", "HEAD", "PUT", "DELETE", "OPTIONS"}),
+    raise_on_status=False,
+)
 
 
 class TimeoutHTTPAdapter(HTTPAdapter):
@@ -24,8 +36,7 @@ def apply_timeout(api, timeout=AIRTABLE_TIMEOUT):
         return
     session = api.session
 
-    max_retries = getattr(session.get_adapter("https://"), "max_retries", 0)
-    adapter = TimeoutHTTPAdapter(max_retries=max_retries, timeout=timeout)
+    adapter = TimeoutHTTPAdapter(max_retries=AIRTABLE_RETRY, timeout=timeout)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
 

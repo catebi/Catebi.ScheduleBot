@@ -1,8 +1,11 @@
 """Level 1: run_airtable offloads to a worker thread and carries context along."""
 
+import concurrent.futures.thread as cft
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from app.airtable_logger import _context, airtable_context
+from app.data import airtable_async
 from app.data.airtable_async import run_airtable
 
 
@@ -40,3 +43,16 @@ async def test_airtable_context_propagates_into_worker():
         return await run_airtable(_context.get)
 
     assert await do() == "mycontext"
+
+
+def test_shutdown_executor_unregisters_threads_from_atexit_join(monkeypatch):
+    throwaway = ThreadPoolExecutor(max_workers=1, thread_name_prefix="airtable-test")
+    throwaway.submit(lambda: None).result()  # spawn + register a worker thread
+    threads = list(throwaway._threads)
+    assert threads, "executor should have spawned at least one worker"
+    assert any(t in cft._threads_queues for t in threads)
+
+    monkeypatch.setattr(airtable_async, "_executor", throwaway)
+    airtable_async.shutdown_executor()
+
+    assert all(t not in cft._threads_queues for t in threads)
