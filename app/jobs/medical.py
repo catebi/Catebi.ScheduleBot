@@ -113,8 +113,8 @@ async def _todays_medical_duty():
     return medical_duty_none[_LANG]
 
 
-@logger
 @aiocron.crontab("00 11 * * *")  # every day at 11:00
+@logger
 @airtable_context("daily_medical_notification")
 async def send_daily_medical_notification():
     settings_dict = await load_settings()

@@ -28,8 +28,8 @@ from app.translations import (
 _LANG = "ru"
 
 
-@logger
 @aiocron.crontab("00 10 * * *")  # every day at 10:00
+@logger
 @airtable_context("daily_cat_flat_status_notification")
 async def send_daily_cat_flat_status_notification():
     settings_dict = await load_settings()
@@ -174,8 +174,8 @@ def _build_changes_message(new_cats, departed_cats, status_changes, medical_chan
     return changes_none[_LANG]
 
 
-@logger
 @aiocron.crontab("00 22 * * *")  # every day at 22:00 (10 PM)
+@logger
 @airtable_context("daily_cat_flat_changes_notification")
 async def send_daily_cat_flat_changes_notification():
     settings_dict = await load_settings()
