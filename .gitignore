@@ -3,7 +3,10 @@ __pycache__
 /*.session-journal
 .env_temp
 .env
+.env.local
+
 .DS_Store
 airtable.log
 .claude
-CLAUDE.md.env.local
+
+.idea

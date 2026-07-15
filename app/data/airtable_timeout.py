@@ -1,15 +1,4 @@
-"""Enforce a request timeout on pyairtable, which otherwise ignores it.
-
-pyairtable (through 3.4.0 and the current ``main`` branch) accepts ``timeout=``
-on ``Api``/ORM ``Meta`` and stores it as ``Api.timeout``, but never passes it to
-the underlying ``requests`` call — ``Api.request()`` calls ``session.request(...)``
-without ``timeout=``. As a result ``AIRTABLE_TIMEOUT`` has no effect and a stalled
-connection can hang the bot indefinitely.
-
-We fix it at the transport layer: mount an ``HTTPAdapter`` on each Api's session
-that injects the timeout into every request that doesn't already set one. The
-adapter keeps the retry strategy pyairtable configured, so retries still work.
-"""
+# Enforce a request timeout on pyairtable, which otherwise ignores it.
 
 import logging
 
