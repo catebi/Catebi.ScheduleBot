@@ -12,6 +12,9 @@ from app.constants import (
     ROOM_CAPACITIES,
     SOFTR_CAT_FLAT_DETAILS_URL,
     SOFTR_REQUEST_DETAILS_URL,
+    TYPE_CLEANING,
+    TYPE_GENERAL_CLEANING,
+    TYPE_MEDICAL,
     UNKNOWN_DAYS_SORT_KEY,
 )
 from app.data.airtable_async import run_airtable
@@ -58,7 +61,11 @@ async def _todays_schedule_summary():
     schedule_formula = AND(
         GTE(Field("date"), today_start),
         LTE(Field("date"), today_end),
-        OR(match({"type": "medical"}), match({"type": "cleaning"})),
+        OR(
+            match({"type": TYPE_MEDICAL}),
+            match({"type": TYPE_CLEANING}),
+            match({"type": TYPE_GENERAL_CLEANING}),
+        ),
     )
     today_schedules = await run_airtable(Schedule.all, formula=schedule_formula, fields=["date", "telegram", "type"])
 
@@ -70,9 +77,9 @@ async def _todays_schedule_summary():
         except Exception:
             pass
         time_str = s.date.strftime("%H:%M") if getattr(s, "date", None) else "??:??"
-        if s.type == "cleaning":
+        if s.type in (TYPE_CLEANING, TYPE_GENERAL_CLEANING):
             cleaning.append((time_str, _normalize_telegram(getattr(s, "telegram", None))))
-        elif s.type == "medical":
+        elif s.type == TYPE_MEDICAL:
             medical.append((time_str, _normalize_telegram(getattr(s, "telegram", None))))
 
     cleaning.sort(key=lambda x: x[0])

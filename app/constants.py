@@ -5,6 +5,7 @@ from app.config import BASE_DIR
 # --- Shift types (the ``type`` field on the schedule table) -----------------
 TYPE_CLEANING = "cleaning"
 TYPE_CLEANING_CATLOFT = "cleaning_catloft"
+TYPE_GENERAL_CLEANING = "general_cleaning"
 TYPE_MEDICAL = "medical"
 TYPE_STERIL_ACCEPTANCE = "steril_acceptance"
 TYPE_STERIL_RELEASE = "steril_release"
@@ -15,6 +16,7 @@ SCHEDULE_TYPES = [
     TYPE_STERIL_ACCEPTANCE,
     TYPE_STERIL_RELEASE,
     TYPE_CLEANING_CATLOFT,
+    TYPE_GENERAL_CLEANING,
 ]
 
 # --- Volunteer duty codes (the ``duty_codes`` lookup on the volunteer table) -
@@ -25,6 +27,7 @@ DUTY_ADMIN_CURATOR = "kk_admin_curator"
 
 # Short codes packed into callback data for the "sign up" flow.
 DUTY_SHORT_CLEANING = "cln"
+DUTY_SHORT_GENERAL_CLEANING = "gcln"
 DUTY_SHORT_MEDICAL = "med"
 DUTY_SHORT_STERIL = "steril"
 

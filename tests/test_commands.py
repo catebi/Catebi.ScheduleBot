@@ -39,7 +39,7 @@ async def test_schedule_handler_shows_main_menu(make_event, user_factory, patch_
     assert event.last["method"] == "respond"
     assert main_menu_header["ru"] in event.last_text
     data = button_data(event.last["buttons"])
-    assert "new_schedule;cln+med" in data
+    assert "new_schedule;cln+gcln+med" in data
     assert "my_schedule" in data
     assert "general_schedule" in data  # visible in "today" view
     assert "notifications;;" in data  # admin only
@@ -65,7 +65,7 @@ async def test_schedule_handler_non_admin_has_no_notifications(make_event, user_
 
     data = button_data(event.last["buttons"])
     assert "notifications;;" not in data
-    assert "new_schedule;cln" in data
+    assert "new_schedule;cln+gcln" in data
 
 
 async def test_start_handler_shows_language_menu(make_event, button_data):
