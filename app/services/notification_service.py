@@ -14,6 +14,7 @@ from app.constants import (
     DUTY_CLEANING,
     DUTY_MEDICAL,
     DUTY_SHORT_CLEANING,
+    DUTY_SHORT_GENERAL_CLEANING,
     DUTY_SHORT_MEDICAL,
     DUTY_SHORT_STERIL,
     DUTY_STERIL,
@@ -49,6 +50,7 @@ def _duties_code(volunteer) -> str:
     duties_set = []
     if DUTY_CLEANING in volunteer.duties:
         duties_set.append(DUTY_SHORT_CLEANING)
+        duties_set.append(DUTY_SHORT_GENERAL_CLEANING)
     if DUTY_MEDICAL in volunteer.duties:
         duties_set.append(DUTY_SHORT_MEDICAL)
     if DUTY_STERIL in volunteer.duties:

@@ -74,9 +74,10 @@ async def test_new_schedule_no_duties(make_event, user_factory, button_data):
 
 async def test_new_schedule_multiple_duties_offers_types(make_event, user_factory, button_data):
     event = make_event()
-    await sched.new_schedule(ctx(event, "new_schedule;cln+med", user_factory()))
+    await sched.new_schedule(ctx(event, "new_schedule;cln+gcln+med", user_factory()))
     data = button_data(event.last["buttons"])
     assert "new_schedule;cleaning" in data
+    assert "new_schedule;general_cleaning" in data
     assert "new_schedule;medical" in data
 
 
@@ -86,14 +87,39 @@ async def test_new_schedule_cleaning_asks_location(make_event, user_factory, but
     assert "new_schedule;cleaning;loc" in button_data(event.last["buttons"])
 
 
-async def test_new_schedule_lists_available_dates(make_event, user_factory, button_data, fake_schedule):
-    fake_schedule.all_result = []  # nothing booked -> all 14 days free
+async def test_new_schedule_general_cleaning_asks_location(make_event, user_factory, button_data):
+    event = make_event()
+    await sched.new_schedule(ctx(event, "new_schedule;general_cleaning", user_factory()))
+    assert "new_schedule;general_cleaning;loc" in button_data(event.last["buttons"])
+
+
+def _date_buttons(data):
+    return [d for d in data if d and d.startswith("set_schedule_time;")]
+
+
+async def test_new_schedule_lists_weekdays_for_cleaning(make_event, user_factory, button_data, fake_schedule):
+    fake_schedule.all_result = []  # nothing booked
     event = make_event()
     await sched.new_schedule(ctx(event, "new_schedule;cleaning;loc", user_factory()))
     data = button_data(event.last["buttons"])
     assert data[-1] == "back"
-    date_buttons = [d for d in data if d and d.startswith("set_schedule_time;")]
-    assert len(date_buttons) == 14  # SCHEDULE_WINDOW_DAYS
+    date_buttons = _date_buttons(data)
+    # 14-day window = 2 full weeks -> exactly 10 weekdays.
+    assert len(date_buttons) == 10
+    for d in date_buttons:
+        assert datetime.strptime(d.split(";")[1], "%Y-%m-%d").weekday() < 5
+
+
+async def test_new_schedule_lists_weekends_for_general_cleaning(make_event, user_factory, button_data, fake_schedule):
+    fake_schedule.all_result = []  # nothing booked
+    event = make_event()
+    await sched.new_schedule(ctx(event, "new_schedule;general_cleaning;loc", user_factory()))
+    data = button_data(event.last["buttons"])
+    date_buttons = _date_buttons(data)
+    # 14-day window = 2 full weeks -> exactly 4 weekend days.
+    assert len(date_buttons) == 4
+    for d in date_buttons:
+        assert datetime.strptime(d.split(";")[1], "%Y-%m-%d").weekday() >= 5
 
 
 async def test_add_schedule_cleaning_saves_and_posts(
@@ -109,6 +135,20 @@ async def test_add_schedule_cleaning_saves_and_posts(
     assert event.last["method"] == "edit"
     assert add_schedule_success["ru"].split("{")[0] in event.last_text
     # ...and the cleaning topic got a post.
+    assert sent_messages and sent_messages[-1]["reply_to"] == 11
+
+
+async def test_add_schedule_general_cleaning_saves_and_posts_to_cleaning_topic(
+    make_event, user_factory, fake_schedule, quiet_side_effects, topics, sent_messages
+):
+    user = user_factory(language="ru", telegram="@alice")
+    event = make_event(username="alice")
+    await sched.add_schedule(ctx(event, "add_schedule;2024-06-01;10:00;general_cleaning", user))
+
+    assert len(fake_schedule.saved) == 1
+    assert fake_schedule.saved[0]["type"] == "general_cleaning"
+    assert add_schedule_success["ru"].split("{")[0] in event.last_text
+    # general cleaning announcements go to the same cleaning topic.
     assert sent_messages and sent_messages[-1]["reply_to"] == 11
 
 

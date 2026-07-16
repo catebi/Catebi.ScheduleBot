@@ -9,7 +9,7 @@ from telethon import Button
 
 from app.airtable_logger import airtable_context
 from app.bot_client import bot
-from app.constants import DUTY_ADMIN_CURATOR
+from app.constants import DUTY_ADMIN_CURATOR, TYPE_CLEANING, TYPE_GENERAL_CLEANING
 from app.data.airtable_async import run_airtable
 from app.logging_setup import logger
 from app.models import Notification, Schedule, Volunteer
@@ -21,9 +21,15 @@ from app.translations import (
     button_curator_notifications_send_cleaning,
     button_curator_notifications_send_medical,
     notifications_no_cleaning_volunteers,
+    notifications_no_general_cleaning_volunteers,
     notifications_no_medical_volunteers,
     notifications_no_volunteers_at_all,
 )
+
+
+def expected_cleaning_type(date) -> str:
+    """The cleaning shift type a date is supposed to have: regular on weekdays, general on weekends."""
+    return TYPE_GENERAL_CLEANING if date.weekday() >= 5 else TYPE_CLEANING
 
 
 @logger
@@ -92,9 +98,11 @@ async def send_curator_notifications():
                 )
             else:
                 schedule_types = [s.type for s in schedules]
-                if "cleaning" not in schedule_types:
+                # Weekdays expect a regular cleaning shift, weekends a general cleaning one.
+                cleaning_type = expected_cleaning_type(date)
+                if cleaning_type not in schedule_types:
                     logging.info(
-                        f"No cleaning volunteers found for {date} for {curator.telegram}, sending notification."
+                        f"No {cleaning_type} volunteers found for {date} for {curator.telegram}, sending notification."
                     )
                     buttons.append(
                         [
@@ -104,9 +112,12 @@ async def send_curator_notifications():
                             )
                         ]
                     )
-                    text = notifications_no_cleaning_volunteers[curator.language].format(
-                        format_date_by_language(date, curator.language)
+                    no_volunteers_text = (
+                        notifications_no_general_cleaning_volunteers
+                        if cleaning_type == TYPE_GENERAL_CLEANING
+                        else notifications_no_cleaning_volunteers
                     )
+                    text = no_volunteers_text[curator.language].format(format_date_by_language(date, curator.language))
                 elif "medical" not in schedule_types:
                     logging.info(
                         f"No medical volunteers found for {date} for {curator.telegram}, sending notification."
