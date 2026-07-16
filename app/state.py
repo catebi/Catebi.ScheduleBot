@@ -1,7 +1,7 @@
 # Cached schedule / volunteer views, refreshed by services.update_volunteers.
-scheduled_dates = None
-today_volunteers_list = None
-dates_list = None
+scheduled_dates = []
+today_volunteers_list = []
+dates_list = []
 
 # Resolved Telegram topic chat entity and per-topic message ids.
 topic_input_entity = None
