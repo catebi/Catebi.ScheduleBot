@@ -82,6 +82,8 @@ jobs:
             AIRTABLE_BASE_ID=${{ secrets.AIRTABLE_BASEID }}
             AIRTABLE_STERILIZATION_BASE_ID=${{ secrets.AIRTABLE_STERILIZATION_BASEID }}
             VERSION=${{ needs.checkout.outputs.bot_version }}
+            GLITCHTIP_DSN=${{ secrets.GLITCHTIP_DSN }}
+            ENVIRONMENT=production
             EOF
             echo "Pulling Docker images..."
             docker compose down
