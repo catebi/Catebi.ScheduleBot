@@ -64,8 +64,8 @@ def multi_select(name, choices):
 
 
 DUTY_CODES = ["kk_cleaning", "kk_medical", "kk_admin_curator", "steril_cat_in_out"]
-SCHEDULE_TYPES = ["cleaning", "cleaning_catloft", "medical",
-                  "steril_acceptance", "steril_release"]
+SCHEDULE_TYPES = ["cleaning", "cleaning_catloft", "general_cleaning",
+                  "medical", "steril_acceptance", "steril_release"]
 STERIL_STATUSES = ["принята в кд", "ожидает стерилизацию",
                    "готова к выписке", "назначен медуход"]
 

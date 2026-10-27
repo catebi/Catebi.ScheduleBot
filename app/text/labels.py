@@ -3,12 +3,14 @@
 from app.constants import (
     TYPE_CLEANING,
     TYPE_CLEANING_CATLOFT,
+    TYPE_GENERAL_CLEANING,
     TYPE_MEDICAL,
     TYPE_STERIL_RELEASE,
 )
 from app.translations import (
     button_type_cleaning,
     button_type_cleaning_location,
+    button_type_general_cleaning,
     button_type_medical,
     button_type_steril_acceptance,
     button_type_steril_release,
@@ -25,6 +27,8 @@ def build_label(date_type: str, username: str) -> str:
         return "🧹" + WORD_JOINER + "🏠" + WORD_JOINER + username
     if date_type == TYPE_CLEANING_CATLOFT:
         return "🧹" + WORD_JOINER + "🪜" + WORD_JOINER + username
+    if date_type == TYPE_GENERAL_CLEANING:
+        return "🧼" + WORD_JOINER + "🏠" + WORD_JOINER + username
     if date_type == TYPE_MEDICAL:
         return "🏥" + WORD_JOINER + username
     if date_type == TYPE_STERIL_RELEASE:
@@ -39,6 +43,8 @@ def label_for_type(shift_type: str, language: str) -> str:
         return button_type_cleaning[language]
     if shift_type == TYPE_CLEANING_CATLOFT:
         return button_type_cleaning_location[language]["catloft"]
+    if shift_type == TYPE_GENERAL_CLEANING:
+        return button_type_general_cleaning[language]
     if shift_type == TYPE_MEDICAL:
         return button_type_medical[language]
     if shift_type == TYPE_STERIL_RELEASE:

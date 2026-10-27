@@ -52,7 +52,7 @@ ORM и запросы обращаются к ним по строковому �
 | `volunteer`        | Link → `volunteer`  | одиночная связь |
 | `type`             | Single select       | опции ниже |
 
-Опции `type`: `cleaning`, `cleaning_catloft`, `medical`, `steril_acceptance`, `steril_release`.
+Опции `type`: `cleaning`, `cleaning_catloft`, `general_cleaning`, `medical`, `steril_acceptance`, `steril_release`.
 
 ### Таблица `notification`
 Настройки уведомлений кураторов. Бот читает и пишет.

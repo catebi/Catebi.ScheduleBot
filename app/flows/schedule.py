@@ -8,11 +8,13 @@ from app import state
 from app.bot_client import bot
 from app.constants import (
     DUTY_SHORT_CLEANING,
+    DUTY_SHORT_GENERAL_CLEANING,
     DUTY_SHORT_MEDICAL,
     SCHEDULE_TYPES,
     SCHEDULE_WINDOW_DAYS,
     TYPE_CLEANING,
     TYPE_CLEANING_CATLOFT,
+    TYPE_GENERAL_CLEANING,
     TYPE_MEDICAL,
     TYPE_STERIL_ACCEPTANCE,
     TYPE_STERIL_RELEASE,
@@ -31,6 +33,7 @@ from app.translations import (
     button_back,
     button_type_cleaning,
     button_type_cleaning_location,
+    button_type_general_cleaning,
     button_type_medical,
     button_type_steril_acceptance,
     button_type_steril_release,
@@ -79,6 +82,8 @@ def _topic_emoji(shift_type, arrow):
         return "🧹🏠"
     if shift_type == "cleaning_catloft":
         return "🧹🪜"
+    if shift_type == "general_cleaning":
+        return "🧼🏠"
     return arrow
 
 
@@ -96,6 +101,10 @@ async def new_schedule(ctx):
         buttons = []
         if DUTY_SHORT_CLEANING in duties:
             buttons.append([Button.inline(button_type_cleaning[language], data="new_schedule;cleaning")])
+        if DUTY_SHORT_GENERAL_CLEANING in duties:
+            buttons.append(
+                [Button.inline(button_type_general_cleaning[language], data="new_schedule;general_cleaning")]
+            )
         if DUTY_SHORT_MEDICAL in duties:
             buttons.append([Button.inline(button_type_medical[language], data="new_schedule;medical")])
         if TYPE_STERIL_ACCEPTANCE in duties:
@@ -113,6 +122,8 @@ async def new_schedule(ctx):
     if shift_type not in SCHEDULE_TYPES:
         if shift_type == DUTY_SHORT_CLEANING:
             shift_type = TYPE_CLEANING
+        elif shift_type == DUTY_SHORT_GENERAL_CLEANING:
+            shift_type = TYPE_GENERAL_CLEANING
         elif shift_type == DUTY_SHORT_MEDICAL:
             shift_type = TYPE_MEDICAL
         elif shift_type == TYPE_STERIL_ACCEPTANCE:
@@ -121,9 +132,9 @@ async def new_schedule(ctx):
             shift_type = TYPE_STERIL_RELEASE
 
     # Ask for cleaning location before picking a date (third segment marks it done).
-    if shift_type == TYPE_CLEANING and len(data.split(";")) < 3:
+    if shift_type in (TYPE_CLEANING, TYPE_GENERAL_CLEANING) and len(data.split(";")) < 3:
         buttons = [
-            [Button.inline(button_type_cleaning_location[language]["catflat"], data="new_schedule;cleaning;loc")],
+            [Button.inline(button_type_cleaning_location[language]["catflat"], data=f"new_schedule;{shift_type};loc")],
             [Button.inline(button_back[language], data="back")],
         ]
         await event.edit(new_schedule_cleaning_location_prompt[language], buttons=buttons)
@@ -133,9 +144,15 @@ async def new_schedule(ctx):
     available_dates = {}
     for i in range(SCHEDULE_WINDOW_DAYS):
         date = datetime.now().date() + timedelta(days=i)
+        # Regular cleaning runs on weekdays only, general cleaning on weekends only.
+        if shift_type == TYPE_CLEANING and date.weekday() >= 5:
+            continue
+        if shift_type == TYPE_GENERAL_CLEANING and date.weekday() < 5:
+            continue
         available_dates[date] = {
             "cleaning": 0,
             "cleaning_catloft": 0,
+            "general_cleaning": 0,
             "medical": 0,
             "steril_release": 0,
             "steril_acceptance": 0,
@@ -164,7 +181,7 @@ async def new_schedule(ctx):
     for date in available_dates:
         slot_count = (
             available_dates[date][shift_type]
-            if shift_type in [TYPE_CLEANING, TYPE_CLEANING_CATLOFT]
+            if shift_type in [TYPE_CLEANING, TYPE_CLEANING_CATLOFT, TYPE_GENERAL_CLEANING]
             else available_dates[date]["cleaning"]
         )
         cb_data = (
@@ -268,7 +285,7 @@ async def add_schedule(ctx):
             date.strftime("%H:%M"),
         ),
         reply_to=state.cleaning_topic_id
-        if shift_type in ["cleaning", "cleaning_catloft"]
+        if shift_type in ["cleaning", "cleaning_catloft", "general_cleaning"]
         else state.medical_topic_id
         if shift_type == "medical"
         else state.steril_cat_topic_id,
@@ -391,7 +408,7 @@ async def delete_schedule(ctx):
             date.strftime("%H:%M"),
         ),
         reply_to=state.cleaning_topic_id
-        if shift_type in ["cleaning", "cleaning_catloft"]
+        if shift_type in ["cleaning", "cleaning_catloft", "general_cleaning"]
         else state.medical_topic_id
         if shift_type == "medical"
         else state.steril_cat_topic_id,

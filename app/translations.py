@@ -232,6 +232,11 @@ notifications_no_cleaning_volunteers = {
     "ru": "На дату **{}** нет зарегистрированных волонтеров по уборке!",
 }
 
+notifications_no_general_cleaning_volunteers = {
+    "en": "There are no general cleaning volunteers registered for **{}**!",
+    "ru": "На дату **{}** нет зарегистрированных волонтеров по генеральной уборке!",
+}
+
 notifications_no_medical_volunteers = {
     "en": "There are no medical volunteers registered for **{}**!",
     "ru": "На дату **{}** нет зарегистрированных волонтеров по медуходу!",
@@ -277,6 +282,8 @@ button_type_cleaning_location = {
     "en": {"catflat": "🧹🏠 CatFlat", "catloft": "🧹🪜 CatLoft"},
     "ru": {"catflat": "🧹🏠 Котоквартира", "catloft": "🧹🪜 Котолофт"},
 }
+
+button_type_general_cleaning = {"en": "🧼 General cleaning", "ru": "🧼 Генеральная уборка"}
 
 button_type_medical = {"en": "🏥 Medical", "ru": "🏥 Медуход"}
 
@@ -388,12 +395,14 @@ topic_duty_word = {
         "medical": "medical care",
         "cleaning": "cleaning the cat flat",
         "cleaning_catloft": "cleaning the cat loft",
+        "general_cleaning": "general cleaning of the cat flat",
         "steril": "cat release",
     },
     "ru": {
         "medical": "медуходу",
         "cleaning": "уборке в котоквартире",
         "cleaning_catloft": "уборке в котолофте",
+        "general_cleaning": "генеральной уборке в котоквартире",
         "steril": "выдаче кошков",
     },
 }
