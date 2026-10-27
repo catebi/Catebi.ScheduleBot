@@ -45,7 +45,7 @@ async def _dispatch_callback(event):
     # Change user's language (handled before the language is resolved below).
     if data.startswith("language"):
         _, lang = data.split(":")
-        await start_handler(event, check_user=True, language=lang)
+        await start_handler(event, check_user=True, language=lang, edit=True)
         return
 
     # Ignore callbacks from users not in the volunteer table (e.g. stale buttons).

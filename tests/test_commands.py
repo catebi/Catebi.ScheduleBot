@@ -4,6 +4,7 @@ import types
 
 import pytest
 
+from app.flows.dispatch import callback_handler
 from app.handlers import commands
 from app.models import Settings, Volunteer
 from app.translations import (
@@ -69,32 +70,45 @@ async def test_schedule_handler_non_admin_has_no_notifications(make_event, user_
 
 
 async def test_start_handler_shows_language_menu(make_event, button_data):
-    event = make_event()
+    event = make_event(message="/start")
     await commands.start_handler(event)  # check_user defaults to False
 
-    assert event.last["method"] == "edit"
+    assert event.last["method"] == "respond"
     assert event.last_text == language_selection["en"]
     assert button_data(event.last["buttons"]) == ["language:en", "language:ru"]
 
 
 async def test_start_handler_unregistered(make_event, patch_volunteer):
     patch_volunteer(None)
-    event = make_event()
+    event = make_event(data="language:ru")
 
-    await commands.start_handler(event, check_user=True, language="ru")
+    await callback_handler(event)
 
+    assert event.last["method"] == "edit"
     assert event.last_text == error_not_registered["ru"]
 
 
 async def test_start_handler_registered_sets_language_and_opens_menu(make_event, user_factory, patch_volunteer):
     user = user_factory(language="en", duties=["kk_cleaning"])
     patch_volunteer(user)
-    event = make_event()
+    event = make_event(data="language:ru")
 
-    await commands.start_handler(event, check_user=True, language="ru")
+    await callback_handler(event)
 
+    assert event.last["method"] == "edit"
     assert user.language == "ru"  # saved
     assert main_menu_header["ru"] in event.last_text  # delegated to schedule_handler
+
+
+async def test_change_language_callback_edits_language_menu(make_event, patch_volunteer, user_factory, button_data):
+    patch_volunteer(user_factory(language="ru"))
+    event = make_event(data="change_language")
+
+    await callback_handler(event)
+
+    assert event.last["method"] == "edit"
+    assert event.last_text == language_selection["ru"]
+    assert button_data(event.last["buttons"]) == ["language:en", "language:ru"]
 
 
 async def test_help_handler(make_event, user_factory, patch_volunteer):

@@ -50,25 +50,28 @@ from app.translations import (
 @bot.on(events.NewMessage(pattern="/start", func=lambda e: e.is_private))  # private chat only
 @logger
 @airtable_context("start_handler")
-async def start_handler(event, check_user: bool = False, language: str = "en"):
+async def start_handler(event, check_user: bool = False, language: str = "en", edit: bool = False):
     if not event.is_private:
         return
+
+    # Incoming commands need a new message; callbacks update the bot's menu.
+    send_response = event.edit if edit else event.respond
 
     # Show the language selection menu on first launch.
     if not check_user:
         buttons = [[Button.inline(languages[lang], data=f"language:{lang}")] for lang in languages]
-        await event.edit(language_selection[language], buttons=buttons)
+        await send_response(language_selection[language], buttons=buttons)
         return
 
     user = await run_airtable(Volunteer.first, formula=match({"telegram_chat_id": event.sender.id}))
     if not user:
-        await event.edit(error_not_registered[language])
+        await send_response(error_not_registered[language])
         return
 
     user.language = language
     await run_airtable(user.save)
 
-    await schedule_handler(event, language, update=True)
+    await schedule_handler(event, language, update=edit)
 
 
 @bot.on(events.NewMessage(pattern="/help"))

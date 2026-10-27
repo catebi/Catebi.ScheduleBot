@@ -6,6 +6,12 @@ from datetime import datetime, timedelta
 import aiocron
 from pyairtable.formulas import AND, GTE, LTE, OR, Field, match
 from telethon import Button
+from telethon.errors import (
+    ForbiddenError,
+    InputUserDeactivatedError,
+    PeerIdInvalidError,
+    UserIsBlockedError,
+)
 
 from app.airtable_logger import airtable_context
 from app.bot_client import bot
@@ -136,5 +142,15 @@ async def send_curator_notifications():
 
             if text:
                 buttons.append([Button.inline(button_curator_ignore[curator.language], data="back")])
-                await bot.send_message(curator.telegram_chat_id, text, buttons=buttons)
-                break  # Only notify about the closest empty date.
+                try:
+                    await bot.send_message(curator.telegram_chat_id, text, buttons=buttons)
+                except (UserIsBlockedError, ForbiddenError, InputUserDeactivatedError, PeerIdInvalidError) as err:
+                    # Curator blocked the bot, deleted their account, or never started a chat.
+                    # Log and move on so the remaining curators still get notified.
+                    logging.warning(
+                        "Curator %s (%s) is unreachable, skipping notification: %s",
+                        curator.telegram,
+                        curator.telegram_chat_id,
+                        err,
+                    )
+                break  # Only notify about the closest empty date (sent or curator unreachable).
