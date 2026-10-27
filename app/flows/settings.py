@@ -12,7 +12,7 @@ from app.translations import (
 
 
 async def change_language(ctx):
-    await start_handler(ctx.event, check_user=False, language=ctx.language)
+    await start_handler(ctx.event, check_user=False, language=ctx.language, edit=True)
 
 
 async def change_view(ctx):
